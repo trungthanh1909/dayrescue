@@ -10,7 +10,8 @@ DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deter
 
 - **M0:** verified on Windows with Python 3.13.1, Git 2.45.1 and GitHub CLI 2.96.0; local `.venv`, dependency installation, doctor and Streamlit startup passed. Private repository: [trungthanh1909/dayrescue](https://github.com/trungthanh1909/dayrescue), initial commit `06cb2c6`. Meta API smoke test remains **BLOCKED**, not PASS.
 - **M1:** typed domain models, deterministic validator and A/B/C sample fixtures verified: all 30 original unit tests pass. These are deterministic Python tests using **no Meta API**.
-- **M2:** Muse Spark agent loop **not implemented**; Meta account is currently restricted due to a payment authorization hold and the event organizers are investigating.
+- **M2A:** provider-independent offline orchestration implemented and unit-tested. It performs preflight, validates an injected provider's structured proposal and allows one correction. No concrete Meta provider or Streamlit agent integration is implemented.
+- **Live M2:** Meta account is still restricted due to a payment authorization hold; smoke test and live integration remain **BLOCKED** pending restored access and explicit authorization.
 - **M3A:** interactive offline Streamlit UI implemented with example and custom-day modes. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison. Focused conversion and AppTest coverage is included. No AI proposal generation or Meta agent integration is implemented.
 
 **No fixture, text or validator result may be presented as live Muse output.**
@@ -56,6 +57,24 @@ All times are local integer minutes since midnight, e.g. 09:30 = 570, using half
 
 These deterministic fixtures establish the Python contracts only; later the real Muse Spark model must generate proposals that pass this same validation.
 
+## Offline agent orchestration (M2A)
+
+`core.agent.run_agent(context, provider)` accepts an existing `DayContext` and a typed callable provider. Each `ProposalRequest` contains a copied context, attempt number (1 or 2), and, for correction, the previous proposal and structured `ValidationIssue` feedback. Providers return `ProposedPlan` or a structured dictionary and must not retry internally. There is no default provider or fallback plan; deterministic stubs exist only in unit tests.
+
+Preflight runs before any provider invocation. Immutable conflicts return `infeasible` with zero calls. Otherwise, every proposal is schema-checked and passed to `validate_plan()`. A valid result stops immediately; an invalid first proposal permits one correction. Exceptions or malformed data terminate immediately without retry. Mutable Pydantic proposal objects are revalidated and detached, and providers receive separate copies of context and feedback.
+
+Terminal statuses:
+
+- `valid`: Python accepted the returned `plan`; `validation.valid` is true.
+- `infeasible`: deterministic preflight found fixed-constraint conflicts; `issues` contains them.
+- `invalid`: both proposals failed validation; `issues` contains the final real validation issues. This status does not prove infeasibility.
+- `provider_error`: a provider invocation raised an exception.
+- `malformed_proposal`: provider data failed the proposal schema.
+
+All failure statuses return `plan=None`. `validation` holds the last completed Python validation, if any, including when a later provider call fails; `issues` exposes those issues or preflight conflicts. `attempts` counts actual provider invocations, including failed ones, and never exceeds two. The trace starts with preflight at attempt 0, followed by one event per provider call: validation outcome and issue codes, or `PROVIDER_ERROR`/`MALFORMED_PROPOSAL`. It excludes raw exception text and schedule content. The agent does not log, execute model text, load credentials or make HTTP requests itself.
+
+Run `.\.venv\Scripts\python.exe -m pytest -q` for the complete offline suite. Agent tests block requests/httpx calls. Live provider adapters, transport timeouts/retries and real model behavior remain unverified; Streamlit continues to expose only the M3A offline UI with AI disabled.
+
 ## Secure Meta API smoke test (ONLY once access is restored)
 
 Meta dashboard: https://dev.meta.ai/. Credits being present and a card being added do **not** prove the API is enabled. Do not repeatedly attempt requests while the account is restricted.
@@ -73,13 +92,13 @@ The smoke script uses a single real Chat Completions request, timeout 30 seconds
 
 ## Git
 
-The repository is already initialized on `main` and published privately. M3A work uses a separate review branch:
+The repository is already initialized on `main` and published privately. M3A was merged through PR #1; M2A work uses a separate review branch:
 
 ```powershell
-git switch feat/m3a-interactive-ui
+git switch feat/m2a-agent-core
 git status --short
 git ls-files .env  # must output nothing
-git push -u origin feat/m3a-interactive-ui
+git push -u origin feat/m2a-agent-core
 ```
 
 If pushing fails, inspect `gh auth status` and your repository state. Never force push or merge automatically. The repo remains private; the user must authorize making it public before submitting the hackathon entry.
@@ -87,8 +106,9 @@ If pushing fails, inspect `gh auth status` and your repository state. Never forc
 ## Planned milestones
 
 - M1: offline validator and contracts (implemented and locally verified).
-- M2: API smoke success; real Muse Spark proposal -> `validate_plan()` -> feedback and second/final proposal, strict bounded retries.
-- M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented; stop for technical review).
+- M2A: provider-independent orchestration, bounded correction loop and offline unit tests (implemented; stop for technical review).
+- Live M2: API smoke success; concrete Muse Spark provider and live validation/correction flow (blocked; requires separate authorization).
+- M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented and merged via PR #1).
 - Later M3 work requires separate authorization; real AI status/execution trace depend on M2 access and integration.
 - M4: tests/edge cases and end-to-end demos.
 - M5–M6: README, 3-minute video and submission.
