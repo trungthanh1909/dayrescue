@@ -5,7 +5,8 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 ## Current reality
 - The Meta account has $150 credits and a payment method, but on 2026-10-28 it displayed: "Your account is restricted. We weren't able to place a temporary hold on your payment method." Event organizers are being asked for a resolution.
 - Live Meta API smoke test is **BLOCKED**, not PASS. Do not invent successes.
-- M0 scaffolding and standalone M1 code/pytest tests may proceed offline. M2 live agent integration must wait for access.
+- M0 Windows bootstrap is verified: Python 3.13.1, local `.venv`, dependencies, Streamlit startup, clean initial commit `06cb2c6`, and private GitHub repo `trungthanh1909/dayrescue`.
+- M1 models, validator and all 30 original deterministic tests passed local verification. M3A adds interactive offline input and focused tests. M2 live agent integration must wait for access and explicit authorization.
 - Codex app with Windows local workspace is the user's coding workflow, not Antigravity.
 
 ## Security and scope
@@ -16,11 +17,11 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - Offline fixture results must be described as deterministic Python tests, **not Muse model output**.
 - Never automatically retry API calls under a billing restriction. The user will explicitly authorize a new smoke test when access is restored.
 
-## Next Codex task (ONLY local verification)
-1. Inspect repository and existing files (do not replace tested M1 implementation).
-2. Check Python and Git versions on Windows; create `.venv`; install `requirements.txt`.
-3. Run `python scripts/doctor.py`, `python -m pytest -q`, and `python scripts/demo_offline.py`.
-4. Launch Streamlit placeholder UI and verify it starts.
-5. Initialize Git and create a clean commit; confirm `.env` is not tracked.
-6. If GitHub CLI login is available, create a PRIVATE `dayrescue` repo or guide the user to create it manually. Public before final hackathon submission.
-7. STOP and report exact executed commands, real outputs, and remaining blockers. No attempt to call Meta API while restricted.
+## Current workflow (M3A offline UI)
+1. Preserve the existing models, deterministic validator and A/B/C hand-authored fixtures unless a reproducible bug requires a fix.
+2. Use `.venv/Scripts/python.exe` for doctor, pytest (including Streamlit AppTest) and the offline demo. UI time conversion lives in `core/ui_input.py`; domain validation stays in the existing Pydantic models.
+3. Custom day accepts 3–8 pending activities and 0–10 busy windows. It runs only `detect_hard_conflicts()`; no detected conflicts must never be described as proof of full feasibility.
+4. Keep AI generation disabled while Meta API access is blocked. Example proposals remain explicitly hand-authored and offline.
+5. Work on `feat/m3a-interactive-ui`, commit and push for technical review. Do not merge into `main` or start M2 automatically.
+6. Confirm `.env` is not tracked. Keep the GitHub repository private until the user authorizes making it public before final submission.
+7. Stop after M3A and report real verification results and remaining limitations.
