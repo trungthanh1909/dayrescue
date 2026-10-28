@@ -14,7 +14,8 @@ DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deter
 - **M2B:** Meta provider adapter implemented and merged via PR #3 (`9a42a47`). Real OpenAI SDK serialization/parsing is tested through in-memory HTTP transport only. No live Meta calls have been performed.
 - **Live M2:** Meta account is still restricted due to a payment authorization hold; smoke test and live integration remain **BLOCKED** pending restored access and explicit authorization.
 - **M3A:** interactive offline Streamlit UI implemented with example and custom-day modes. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison. Focused conversion and AppTest coverage is included. No AI proposal generation or Meta agent integration is implemented.
-- **M3B:** AgentResult presentation and session invalidation prepared and tested offline. All five terminal statuses are supported; successful plans are revalidated against current inputs before display. Provider invocation remains disconnected and AI generation remains disabled.
+- **M3B:** AgentResult presentation and session invalidation merged via PR #4 (`0bae0ae`) and tested offline. All five terminal statuses are supported; successful plans are revalidated against current inputs before display. Provider invocation remains disconnected and AI generation remains disabled.
+- **M4A:** full offline pipeline integration coverage added: UI conversion → DayContext → agent → real SDK with MockTransport → Python validator → presentation/session binding and AppTest rendering. This establishes offline readiness only, not real Meta compatibility.
 
 **No fixture, text or validator result may be presented as live Muse output.**
 
@@ -99,7 +100,37 @@ Empty responses, malformed envelopes/JSON/proposals, truncation (`finish_reason=
 
 **API evidence and remaining assumptions:** Meta's [quickstart](https://dev.meta.ai/docs/cookbook/quickstart-chat-completions) documents the base URL, model, developer role and completion response fields; its [structured output guide](https://dev.meta.ai/docs/structured-output) documents `json_schema` and non-strict schema normalization. [OpenAI SDK documentation](https://developers.openai.com/api/reference/python) describes timeout/retry configuration; the installed SDK's behavior is verified by transport tests. Acceptance of this exact generated schema (including `$defs` and constraints), `max_completion_tokens`, sufficient reasoning/output budget, account/model access and real latency still require a separately authorized live check after the account restriction is removed. No mocked result is evidence of live Meta compatibility or Muse output.
 
-## Secure Meta API smoke test (ONLY once access is restored)
+## Offline end-to-end readiness (M4A)
+
+Run `.\.venv\Scripts\python.exe -m pytest tests/test_integration.py -q` for focused integration coverage, or `.\.venv\Scripts\python.exe -m pytest -q` for the full unit/integration/AppTest suite. The integration tests convert the existing A/B/C scenario inputs through `build_day_context()`, inject a real `MetaProvider` configured with `httpx.MockTransport`, and render the resulting AgentResult through the production presentation helpers in an AppTest-only harness.
+
+Coverage includes validated Late Start and Unexpected Event plans, immutable conflicts with zero provider requests, invalid→valid correction with exact feedback, two invalid proposals, timeout/HTTP failures, malformed proposal JSON and stale input/result invalidation. Request counts are checked at the HTTP transport boundary: at most two per agent run, zero SDK retries and finite timeouts. Tests also check that credentials/raw errors are absent from traces and that ordinary production UI rerenders never invoke MetaProvider. Real HTTP transport is blocked; localhost socketpairs are allowed solely for Windows asyncio.
+
+All encoded completion envelopes and failure responses are test code. The production UI still offers only the labeled hand-authored fixtures and custom deterministic preflight; it does not run mock generation or real generation. B/C integration inputs retain the existing domain fixtures' minimal activity counts; custom UI's 3–8 count is covered separately by AppTest. Malformed JSON from the Meta adapter raises a sanitized adapter error and therefore reaches presentation as the existing `provider_error` status, without attempting a correction.
+
+## Live activation checklist (NOT executed in M4A)
+
+1. Confirm the billing restriction has actually been removed in the Meta dashboard and that the account has model access. Credits/card presence alone is insufficient. Do not change billing/payment settings as part of this milestone.
+2. Create the API key in the dashboard and enter it only into the ignored local `.env`. Confirm `git ls-files .env` prints nothing. Securely load it with python-dotenv in the explicitly invoked entry point; the adapter itself only reads process configuration. Never print the key, environment contents or raw API bodies.
+3. Obtain explicit authorization for **one** real smoke test, then run the command below once. A nonzero exit remains a failure/blocker; do not automatically retry. This smoke verifies basic access only, not schedule/schema compatibility.
+4. After successful smoke, separately authorize bounded live adapter tests. Verify the generated JSON schema (`$defs`, limits, `strict: false`), completion envelope and `max_completion_tokens=2048` support. Check reasoning/output budget is sufficient for nonempty JSON with `finish_reason=stop`, followed by Python validation. Verify one-correction behavior, request counts, timeouts and safe failure handling. Any access/billing failure stops further calls; no automatic retries.
+5. Connect production Streamlit generation only after those live tests succeed and technical review explicitly authorizes activation. Trigger generation only on an explicit action, retain the two-request ceiling and input fingerprint binding, and make no request on an ordinary rerender. Keep live generation disabled until then.
+
+Offline MockTransport PASS does **not** establish account access, live model quality, schema compatibility, latency or sufficient reasoning/output tokens. These remain blockers until the separately authorized live checks pass.
+
+## Three-minute offline demo outline
+
+| Time | Show and say |
+| --- | --- |
+| 0:00–0:20 | Explain the interrupted-day problem and state: this is an offline deterministic preview; Meta access remains blocked. |
+| 0:20–0:55 | Example A: postponed reading and preserved fixed appointment. Point to the **hand-authored fixture** label and Python validation. |
+| 0:55–1:25 | Example B: study moves around the visitor; the fixed call stays. These are fixture proposals, not Muse output. |
+| 1:25–1:50 | Example C: immutable meeting/busy conflict is rejected. Explain the integration test proves agent preflight makes zero transport requests here. |
+| 1:50–2:25 | Custom day: enter three pending activities, mark one fixed and add a conflicting busy window. Show hard-conflict feedback; no AI plan is generated. |
+| 2:25–2:50 | Show `python -m pytest tests/test_integration.py -v`: full mocked SDK-to-presentation path, bounded correction and safe errors. The result rendering harness exists only in tests. |
+| 2:50–3:00 | State the boundary: offline pipeline verified; real Meta compatibility and production generation await restored access, authorized tests and review. |
+
+## Secure Meta API smoke test (ONLY after restored access AND explicit authorization)
 
 Meta dashboard: https://dev.meta.ai/. Credits being present and a card being added do **not** prove the API is enabled. Do not repeatedly attempt requests while the account is restricted.
 
@@ -116,13 +147,13 @@ The smoke script uses a single real Chat Completions request, timeout 30 seconds
 
 ## Git
 
-The repository is already initialized on `main` and published privately. M3A, M2A and M2B were merged through PRs #1–#3; M3B work uses a separate review branch:
+The repository is already initialized on `main` and published privately. M3A, M2A, M2B and M3B were merged through PRs #1–#4; M4A work uses a separate review branch:
 
 ```powershell
-git switch feat/m3b-agent-ui
+git switch feat/m4a-e2e-readiness
 git status --short
 git ls-files .env  # must output nothing
-git push -u origin feat/m3b-agent-ui
+git push -u origin feat/m4a-e2e-readiness
 ```
 
 If pushing fails, inspect `gh auth status` and your repository state. Never force push or merge automatically. The repo remains private; the user must authorize making it public before submitting the hackathon entry.
@@ -134,9 +165,9 @@ If pushing fails, inspect `gh auth status` and your repository state. Never forc
 - M2B: Meta adapter and SDK transport tests (implemented offline and merged via PR #3).
 - Live M2: API smoke success and real Muse Spark validation/correction flow (blocked; requires restored account access and separate authorization).
 - M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented and merged via PR #1).
-- M3B: safe agent result presentation, session invalidation and AppTest coverage (prepared offline; stop for technical review).
+- M3B: safe agent result presentation, session invalidation and AppTest coverage (merged via PR #4).
 - Later M3 work requires separate authorization; real AI status/execution trace depend on M2 access and integration.
-- M4: tests/edge cases and end-to-end demos.
+- M4A: offline integration tests, live activation checklist and honest three-minute demo outline (prepared; stop for technical review).
 - M5–M6: README, 3-minute video and submission.
 
 ### References

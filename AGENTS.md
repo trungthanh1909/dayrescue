@@ -6,7 +6,7 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - The Meta account has $150 credits and a payment method, but on 2026-10-28 it displayed: "Your account is restricted. We weren't able to place a temporary hold on your payment method." Event organizers are being asked for a resolution.
 - Live Meta API smoke test is **BLOCKED**, not PASS. Do not invent successes.
 - M0 Windows bootstrap is verified: Python 3.13.1, local `.venv`, dependencies, Streamlit startup, clean initial commit `06cb2c6`, and private GitHub repo `trungthanh1909/dayrescue`.
-- M1 models, validator and all 30 original deterministic tests passed local verification. M3A interactive offline input is merged via PR #1 (`9e69011`). M2A offline orchestration is merged via PR #2 (`9315b97`). M2B Meta adapter is merged via PR #3 (`9a42a47`), tested only through mocked HTTP transport. M3B prepares result presentation without provider invocation. Live requests must wait for restored access and explicit authorization.
+- M1 models, validator and all 30 original deterministic tests passed local verification. M3A is merged via PR #1 (`9e69011`), M2A via PR #2 (`9315b97`), M2B via PR #3 (`9a42a47`) and M3B presentation via PR #4 (`0bae0ae`). M4A adds full offline pipeline integration tests. Live requests must wait for restored access and explicit authorization.
 - Codex app with Windows local workspace is the user's coding workflow, not Antigravity.
 
 ## Security and scope
@@ -17,11 +17,11 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - Offline fixture results must be described as deterministic Python tests, **not Muse model output**.
 - Never automatically retry API calls under a billing restriction. The user will explicitly authorize a new smoke test when access is restored.
 
-## Current workflow (M3B agent UI preparation, offline only)
+## Current workflow (M4A end-to-end readiness, offline only)
 1. Preserve the existing models, deterministic validator and A/B/C hand-authored fixtures unless a reproducible bug requires a fix.
 2. Use `.venv/Scripts/python.exe` for doctor, pytest (including Streamlit AppTest) and the offline demo. UI time conversion lives in `core/ui_input.py`; domain validation stays in the existing Pydantic models.
 3. Custom day accepts 3–8 pending activities and 0–10 busy windows. Its input preflight uses `detect_hard_conflicts()`; no detected conflicts must never be described as proof of full feasibility. Any stored valid AgentResult must be revalidated against current inputs before display.
 4. Keep AI generation disabled while Meta API access is blocked. Example proposals remain explicitly hand-authored and offline.
-5. Work on `feat/m3b-agent-ui` from updated `main`. Keep data preparation in `core/presentation.py` and Streamlit rendering/session binding in `ui/agent_result.py`. Clear stale results when meaningful input or mode changes, and on invalid input. Bound the displayed trace and show fixed safe errors for provider failures. AgentResult fixtures belong only in tests. Do not change the agent, Meta adapter or validator without a reproducible bug. No live smoke tests, UI provider invocation or fake application providers are permitted. Commit and push for technical review; do not merge or enable live generation automatically.
+5. Work on `feat/m4a-e2e-readiness` from updated `main`. Integration tests in `tests/test_integration.py` must exercise input conversion, real SDK with MockTransport, agent, Python validator and presentation together. Keep fake completion/error responses in tests only; block real HTTP transport and external sockets. Verify at most two requests, zero SDK retries, finite timeouts, safe traces and stale-result invalidation. Preserve production code unless a reproducible bug requires a fix. Prepare README's activation checklist and honest offline demo outline. Do not call live Meta, modify billing settings, connect UI provider invocation or add application stubs. Commit and push for review; do not merge or enable live generation automatically.
 6. Confirm `.env` is not tracked. Keep the GitHub repository private until the user authorizes making it public before final submission.
-7. Stop after M3B and report real verification results and remaining blockers. Test fixtures are never evidence of live Muse output.
+7. Stop after M4A and report real verification results and remaining blockers. Test fixtures are never evidence of live Muse output; offline readiness is not real Meta compatibility.
