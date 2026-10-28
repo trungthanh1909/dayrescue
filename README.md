@@ -11,9 +11,10 @@ DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deter
 - **M0:** verified on Windows with Python 3.13.1, Git 2.45.1 and GitHub CLI 2.96.0; local `.venv`, dependency installation, doctor and Streamlit startup passed. Private repository: [trungthanh1909/dayrescue](https://github.com/trungthanh1909/dayrescue), initial commit `06cb2c6`. Meta API smoke test remains **BLOCKED**, not PASS.
 - **M1:** typed domain models, deterministic validator and A/B/C sample fixtures verified: all 30 original unit tests pass. These are deterministic Python tests using **no Meta API**.
 - **M2A:** provider-independent offline orchestration implemented and merged via PR #2 (`9315b97`). It performs preflight, validates an injected provider's structured proposal and allows one correction.
-- **M2B:** Meta provider adapter implemented with real OpenAI SDK serialization/parsing tested through in-memory HTTP transport only. No live Meta calls or Streamlit AI integration have been performed.
+- **M2B:** Meta provider adapter implemented and merged via PR #3 (`9a42a47`). Real OpenAI SDK serialization/parsing is tested through in-memory HTTP transport only. No live Meta calls have been performed.
 - **Live M2:** Meta account is still restricted due to a payment authorization hold; smoke test and live integration remain **BLOCKED** pending restored access and explicit authorization.
 - **M3A:** interactive offline Streamlit UI implemented with example and custom-day modes. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison. Focused conversion and AppTest coverage is included. No AI proposal generation or Meta agent integration is implemented.
+- **M3B:** AgentResult presentation and session invalidation prepared and tested offline. All five terminal statuses are supported; successful plans are revalidated against current inputs before display. Provider invocation remains disconnected and AI generation remains disabled.
 
 **No fixture, text or validator result may be presented as live Muse output.**
 
@@ -43,6 +44,18 @@ Select **Custom day** to enter 3–8 pending activities. Each row has a name, lo
 Custom mode displays the original activities and runs `detect_hard_conflicts()` only. Fixed activity conflicts with elapsed time, the day horizon, busy windows or other fixed activities are shown with codes and activity names. Absence of detected conflicts does **not** prove full feasibility or optimality; flexible activities are not replanned and no custom proposal is generated.
 
 The **Generate with AI (blocked)** button is disabled and has no request handler. Both modes operate offline. Times use whole local minutes within a single day; the UI accepts 00:00–23:59 and does not offer 24:00 or overnight windows. Inputs are session-local and are not saved to disk.
+
+## Agent result presentation (M3B preparation)
+
+The **Agent result** section currently shows that no result is available for the inputs. It never generates a demonstration AI result. Deterministic AgentResult fixtures exist only in presentation/AppTest tests, not in the application. Existing A/B/C proposals remain separately labeled hand-authored offline fixtures.
+
+Data preparation is isolated in `core/presentation.py`; Streamlit rendering and session binding are in `ui/agent_result.py`. Neither invokes the agent, imports the Meta adapter, loads credentials nor sends requests. Actual orchestration/provider invocation remains in the existing core modules and is not wired to a UI event.
+
+For a `valid` terminal status, the presentation layer requires a plan and a successful stored validation, rechecks its schema and reruns `validate_plan()` for the current context. Only then does it show VALID, the proposed schedule and freshly derived kept/moved/postponed activity summaries. For `infeasible`, it recomputes fixed-constraint conflicts. For `invalid`, it explains that no valid proposal was found within two attempts, without claiming the day is impossible. `provider_error` and `malformed_proposal` show fixed safe errors and suppress any stale plan, success or summaries.
+
+The collapsed execution trace displays at most three events (preflight plus two attempts) and ten known codes per event. Unknown metadata/codes are replaced with safe placeholders; raw exception bodies and model explanations are not rendered. The code allowlist is for presentation sanitization, not a second set of scheduling rules.
+
+Session results are stored with a SHA-256 fingerprint of the mode/scenario and complete canonical DayContext. Changes to meaningful inputs, invalid input or switching modes/scenarios clear the saved result. Returning to old inputs does not restore an old result. The future `store_agent_result()` hook also rejects results for an input that is no longer current; `current_agent_result()` checks the binding again on every rerender. This is session-local preparation, with no persistence or background generation.
 
 ## Domain contracts
 
@@ -74,7 +87,7 @@ Terminal statuses:
 
 All failure statuses return `plan=None`. `validation` holds the last completed Python validation, if any, including when a later provider call fails; `issues` exposes those issues or preflight conflicts. `attempts` counts actual provider invocations, including failed ones, and never exceeds two. The trace starts with preflight at attempt 0, followed by one event per provider call: validation outcome and issue codes, or `PROVIDER_ERROR`/`MALFORMED_PROPOSAL`. It excludes raw exception text and schedule content. The agent does not log, execute model text, load credentials or make HTTP requests itself.
 
-Run `.\.venv\Scripts\python.exe -m pytest -q` for the complete offline suite. Agent tests block requests/httpx calls. Meta adapter tests use the real SDK with `httpx.MockTransport` and block socket connections. Real model behavior remains unverified; Streamlit continues to expose only the M3A offline UI with AI disabled.
+Run `.\.venv\Scripts\python.exe -m pytest -q` for the complete offline suite. Agent tests block requests/httpx calls. Meta adapter tests use the real SDK with `httpx.MockTransport` and block socket connections. Presentation tests block HTTP and agent invocation, allowing only the localhost socketpair required by Windows asyncio. Real model behavior remains unverified; Streamlit AI generation remains disabled.
 
 ## Meta provider adapter (M2B, offline verification only)
 
@@ -103,13 +116,13 @@ The smoke script uses a single real Chat Completions request, timeout 30 seconds
 
 ## Git
 
-The repository is already initialized on `main` and published privately. M3A and M2A were merged through PRs #1 and #2; M2B work uses a separate review branch:
+The repository is already initialized on `main` and published privately. M3A, M2A and M2B were merged through PRs #1–#3; M3B work uses a separate review branch:
 
 ```powershell
-git switch feat/m2b-meta-provider
+git switch feat/m3b-agent-ui
 git status --short
 git ls-files .env  # must output nothing
-git push -u origin feat/m2b-meta-provider
+git push -u origin feat/m3b-agent-ui
 ```
 
 If pushing fails, inspect `gh auth status` and your repository state. Never force push or merge automatically. The repo remains private; the user must authorize making it public before submitting the hackathon entry.
@@ -118,9 +131,10 @@ If pushing fails, inspect `gh auth status` and your repository state. Never forc
 
 - M1: offline validator and contracts (implemented and locally verified).
 - M2A: provider-independent orchestration, bounded correction loop and offline unit tests (implemented and merged via PR #2).
-- M2B: Meta adapter and SDK transport tests (implemented offline; stop for technical review).
+- M2B: Meta adapter and SDK transport tests (implemented offline and merged via PR #3).
 - Live M2: API smoke success and real Muse Spark validation/correction flow (blocked; requires restored account access and separate authorization).
 - M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented and merged via PR #1).
+- M3B: safe agent result presentation, session invalidation and AppTest coverage (prepared offline; stop for technical review).
 - Later M3 work requires separate authorization; real AI status/execution trace depend on M2 access and integration.
 - M4: tests/edge cases and end-to-end demos.
 - M5–M6: README, 3-minute video and submission.
