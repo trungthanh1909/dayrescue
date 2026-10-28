@@ -6,7 +6,7 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - The Meta account has $150 credits and a payment method, but on 2026-10-28 it displayed: "Your account is restricted. We weren't able to place a temporary hold on your payment method." Event organizers are being asked for a resolution.
 - Live Meta API smoke test is **BLOCKED**, not PASS. Do not invent successes.
 - M0 Windows bootstrap is verified: Python 3.13.1, local `.venv`, dependencies, Streamlit startup, clean initial commit `06cb2c6`, and private GitHub repo `trungthanh1909/dayrescue`.
-- M1 models, validator and all 30 original deterministic tests passed local verification. M3A interactive offline input is merged via PR #1 (`9e69011`). M2A adds provider-independent orchestration with offline tests. M2 live agent integration must wait for access and explicit authorization.
+- M1 models, validator and all 30 original deterministic tests passed local verification. M3A interactive offline input is merged via PR #1 (`9e69011`). M2A offline orchestration is merged via PR #2 (`9315b97`). M2B adds a Meta provider adapter tested only through mocked HTTP transport. Live requests must wait for restored access and explicit authorization.
 - Codex app with Windows local workspace is the user's coding workflow, not Antigravity.
 
 ## Security and scope
@@ -17,11 +17,11 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - Offline fixture results must be described as deterministic Python tests, **not Muse model output**.
 - Never automatically retry API calls under a billing restriction. The user will explicitly authorize a new smoke test when access is restored.
 
-## Current workflow (M2A offline agent core)
+## Current workflow (M2B Meta adapter, offline only)
 1. Preserve the existing models, deterministic validator and A/B/C hand-authored fixtures unless a reproducible bug requires a fix.
 2. Use `.venv/Scripts/python.exe` for doctor, pytest (including Streamlit AppTest) and the offline demo. UI time conversion lives in `core/ui_input.py`; domain validation stays in the existing Pydantic models.
 3. Custom day accepts 3–8 pending activities and 0–10 busy windows. It runs only `detect_hard_conflicts()`; no detected conflicts must never be described as proof of full feasibility.
 4. Keep AI generation disabled while Meta API access is blocked. Example proposals remain explicitly hand-authored and offline.
-5. Work on `feat/m2a-agent-core` from updated `main`. Keep orchestration in `core/agent.py` and deterministic stub providers only in unit tests. Preflight must block impossible fixed constraints before calling a provider; validate every proposal with Python. Allow at most two provider invocations, and stop immediately on exceptions or malformed data. Never log raw provider errors or secrets. Commit and push for technical review; do not merge or start live Meta integration automatically.
+5. Work on `feat/m2b-meta-provider` from updated `main`. Keep the Meta adapter in `core/meta_client.py`, with SDK tests using in-memory HTTP transport and blocked network sockets. No live smoke tests or provider requests are permitted in this task. Keep zero SDK retries, finite network timeouts and sanitized errors. Preserve the M2A two-invocation upper bound and Python validation authority. Do not wire the provider into Streamlit or add fake application fallbacks. Commit and push for technical review; do not merge or start live Meta integration automatically.
 6. Confirm `.env` is not tracked. Keep the GitHub repository private until the user authorizes making it public before final submission.
-7. Stop after M2A and report real verification results and remaining limitations.
+7. Stop after M2B and report real verification results, API assumptions and remaining blockers. Mocked SDK responses are test fixtures, never evidence of live Muse output.
