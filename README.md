@@ -8,10 +8,10 @@ DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deter
 
 ## Verified status / limitations
 
-- **M0:** scaffold ready; local Windows environment setup, GitHub repository, Streamlit startup and Meta API smoke test have **not** been verified.
-- **M1:** typed domain models, deterministic validator, sample fixtures and offline unit tests implemented. These tests use **no Meta API**.
+- **M0:** verified on Windows with Python 3.13.1, Git 2.45.1 and GitHub CLI 2.96.0; local `.venv`, dependency installation, doctor and Streamlit startup passed. Private repository: [trungthanh1909/dayrescue](https://github.com/trungthanh1909/dayrescue), initial commit `06cb2c6`. Meta API smoke test remains **BLOCKED**, not PASS.
+- **M1:** typed domain models, deterministic validator and A/B/C sample fixtures verified: all 30 original unit tests pass. These are deterministic Python tests using **no Meta API**.
 - **M2:** Muse Spark agent loop **not implemented**; Meta account is currently restricted due to a payment authorization hold and the event organizers are investigating.
-- **M3:** a limited offline Streamlit scenario/validator preview is present; real user-input UI and Meta agent integration are not implemented.
+- **M3A:** interactive offline Streamlit UI implemented with example and custom-day modes. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison. Focused conversion and AppTest coverage is included. No AI proposal generation or Meta agent integration is implemented.
 
 **No fixture, text or validator result may be presented as live Muse output.**
 
@@ -29,6 +29,18 @@ py -3 -m venv .venv
 ```
 
 Python 3.11+ required. Don't use `py -3` if it points to Python 3.10 or below; use the corresponding launcher version (`py -3.11`, for example). If PowerShell blocks `Activate.ps1`, the commands above work without activation.
+
+Streamlit 1.66.1 is the minimum tested version for the supported `width="stretch"` dataframe API. Run all offline tests with `python -m pytest -q`; AppTest covers custom input, invalid input recovery, fixed/busy conflicts, shortening controls and all three examples. UI tests block HTTP requests through requests/httpx.
+
+## Interactive offline preview
+
+Select **Example scenarios** to inspect the original A/B/C fixtures and their hand-authored proposals. Python `validate_plan()` alone produces VALID/INVALID feedback.
+
+Select **Custom day** to enter 3–8 pending activities. Each row has a name, local start time, duration in minutes, priority and fixed/flexible status. Flexible activities can explicitly allow shortening with a minimum duration. IDs are generated from row positions so duplicate names remain distinct activities. Configure current time, day start/end and 0–10 unexpected busy windows. Changes update the preview immediately; malformed inputs show Pydantic errors instead of stale validation results.
+
+Custom mode displays the original activities and runs `detect_hard_conflicts()` only. Fixed activity conflicts with elapsed time, the day horizon, busy windows or other fixed activities are shown with codes and activity names. Absence of detected conflicts does **not** prove full feasibility or optimality; flexible activities are not replanned and no custom proposal is generated.
+
+The **Generate with AI (blocked)** button is disabled and has no request handler. Both modes operate offline. Times use whole local minutes within a single day; the UI accepts 00:00–23:59 and does not offer 24:00 or overnight windows. Inputs are session-local and are not saved to disk.
 
 ## Domain contracts
 
@@ -61,27 +73,23 @@ The smoke script uses a single real Chat Completions request, timeout 30 seconds
 
 ## Git
 
+The repository is already initialized on `main` and published privately. M3A work uses a separate review branch:
+
 ```powershell
-git init -b main
-git add .
+git switch feat/m3a-interactive-ui
 git status --short
 git ls-files .env  # must output nothing
-git commit -m "feat: bootstrap DayRescue offline validator"
+git push -u origin feat/m3a-interactive-ui
 ```
 
-Create a **new private** repository named `dayrescue`, then push with GitHub CLI if logged in:
-
-```powershell
-gh repo create dayrescue --private --source=. --remote=origin --push
-```
-
-If that command fails, inspect `gh auth status` and your repository state. Never force push. Make the repo public before submitting the hackathon entry. The GitHub repo is **not yet confirmed as created**.
+If pushing fails, inspect `gh auth status` and your repository state. Never force push or merge automatically. The repo remains private; the user must authorize making it public before submitting the hackathon entry.
 
 ## Planned milestones
 
-- M1: offline validator and contracts (implemented, needs user's local verification).
+- M1: offline validator and contracts (implemented and locally verified).
 - M2: API smoke success; real Muse Spark proposal -> `validate_plan()` -> feedback and second/final proposal, strict bounded retries.
-- M3: Streamlit form and timeline with real AI status and short execution trace.
+- M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented; stop for technical review).
+- Later M3 work requires separate authorization; real AI status/execution trace depend on M2 access and integration.
 - M4: tests/edge cases and end-to-end demos.
 - M5–M6: README, 3-minute video and submission.
 

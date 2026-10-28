@@ -1,5 +1,5 @@
 # M0: Small dependency surface; preserve compatible major versions.
-streamlit>=1.40,<2
+streamlit>=1.66.1,<2
 pydantic>=2.10,<3
 openai>=1.60,<3
 python-dotenv>=1.0,<2
