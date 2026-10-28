@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from core.scenarios import impossible_day, late_start, unexpected_event
 from core.ui_input import build_day_context
 from core.validator import detect_hard_conflicts, validate_plan
+from ui.agent_result import show_current_agent_result
 
 
 def clock(minutes: int) -> str:
@@ -99,6 +100,7 @@ def custom_day():
         context = build_day_context(now=now, day_start=start, day_end=end,
                                     activities=activities, busy_windows=busy)
     except ValidationError as exc:
+        show_current_agent_result(None, "custom")
         st.error("Please correct the input below. No constraint check has been run.")
         for error in exc.errors(include_input=False, include_url=False):
             location = " → ".join(str(part + 1) if isinstance(part, int) else part.replace("_", " ")
@@ -106,10 +108,12 @@ def custom_day():
             st.write(f"**{location}**: {error['msg']}")
         return
     except ValueError as exc:
+        show_current_agent_result(None, "custom")
         st.error(f"Please correct the time input: {exc}")
         return
     show_original(context)
     show_preflight(context)
+    show_current_agent_result(context, "custom")
 
 
 st.set_page_config(page_title="DayRescue", page_icon="🛟", layout="wide")
@@ -171,3 +175,4 @@ st.caption(
     "The real Muse Spark agent will generate proposed plans after Meta removes the "
     "account restriction. This preview never calls an AI model."
 )
+show_current_agent_result(context, f"example:{choice}")
