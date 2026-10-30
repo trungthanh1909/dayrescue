@@ -79,6 +79,8 @@ def test_first_request_payload_and_bounds(context, provider_factory):
     assert body["model"] == "muse-spark-1.3"
     assert body["max_completion_tokens"] == 2048
     assert body["stream"] is False
+    assert "reasoning_effort" not in body  # Existing callers retain the provider default.
+    assert "temperature" not in body
     instructions, user = body["messages"]
     assert instructions["role"] == "developer"
     for constraint in ("exactly once", "Fixed", "min_duration_minutes", "now_minute", "half-open", "not overlap"):
@@ -279,3 +281,24 @@ def test_invalid_client_configuration_is_sanitized():
     with pytest.raises(MetaProviderError, match="INVALID_CONFIGURATION") as exc:
         MetaProvider(api_key=TEST_KEY, http_client=object())
     assert TEST_KEY not in str(exc.value)
+
+
+@pytest.mark.parametrize("effort", ["minimal", "low", "medium", "high", "xhigh", "max"])
+def test_configured_reasoning_effort(context, provider_factory, effort):
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=completion(plan().model_dump_json()))
+
+    provider_factory(handler, reasoning_effort=effort)(ProposalRequest(context, 1))
+    assert len(seen) == 1
+    assert seen[0]["reasoning_effort"] == effort
+    assert seen[0]["max_completion_tokens"] == 2048
+    assert "temperature" not in seen[0]
+
+
+@pytest.mark.parametrize("effort", ["none", "", "unsupported", 1])
+def test_invalid_reasoning_effort_is_sanitized(effort):
+    with pytest.raises(MetaProviderError, match="INVALID_CONFIGURATION"):
+        MetaProvider(api_key=TEST_KEY, reasoning_effort=effort)

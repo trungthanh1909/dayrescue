@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Literal
 
 import httpx
 from openai import APITimeoutError, OpenAI, OpenAIError
@@ -44,13 +45,18 @@ class MetaProviderError(RuntimeError):
 
 class MetaProvider:
     def __init__(self, *, api_key: str | None = None, model: str | None = None,
-                 http_client: httpx.Client | None = None):
+                 http_client: httpx.Client | None = None,
+                 reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh", "max"] | None = None):
         key = (api_key if api_key is not None else os.getenv("MODEL_API_KEY", "")).strip()
         if not key:
             raise MetaProviderError("MISSING_CREDENTIALS")
         self.model = (model if model is not None else os.getenv("META_MODEL", DEFAULT_MODEL)).strip()
         if not self.model:
             raise MetaProviderError("INVALID_CONFIGURATION")
+        if reasoning_effort is not None and reasoning_effort not in (
+                "minimal", "low", "medium", "high", "xhigh", "max"):
+            raise MetaProviderError("INVALID_CONFIGURATION")
+        self.reasoning_effort = reasoning_effort
         try:
             self._client = OpenAI(
                 base_url=META_BASE_URL, api_key=key, timeout=TIMEOUT,
@@ -88,6 +94,8 @@ class MetaProvider:
                 }},
                 max_completion_tokens=MAX_COMPLETION_TOKENS,
                 stream=False,
+                **({"reasoning_effort": self.reasoning_effort}
+                   if self.reasoning_effort is not None else {}),
             )
         except APITimeoutError:
             raise MetaProviderError("TIMEOUT") from None
