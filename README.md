@@ -11,12 +11,13 @@ DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deter
 - **M0:** verified on Windows with Python 3.13.1, Git 2.45.1 and GitHub CLI 2.96.0; local `.venv`, dependency installation, doctor and Streamlit startup passed. Private repository: [trungthanh1909/dayrescue](https://github.com/trungthanh1909/dayrescue), initial commit `06cb2c6`.
 - **M1:** typed domain models, deterministic validator and A/B/C sample fixtures verified: all 30 original unit tests pass. These are deterministic Python tests using **no Meta API**.
 - **M2A:** provider-independent offline orchestration implemented and merged via PR #2 (`9315b97`). It performs preflight, validates an injected provider's structured proposal and allows one correction.
-- **M2B:** Meta provider adapter implemented and merged via PR #3 (`9a42a47`). Adapter serialization/parsing is verified offline through the real OpenAI SDK and in-memory HTTP transport; live scheduling remains unverified.
+- **M2B:** Meta provider adapter implemented and merged via PR #3 (`9a42a47`). Adapter serialization/parsing is verified offline through the real OpenAI SDK and in-memory HTTP transport; see the separate M4B live result below.
 - **Connectivity smoke: PASS**, as reported by the user for the local Windows ADMIN session: `muse-spark-1.3` returned `DAYRESCUE_READY`, using **382 total tokens**. This supersedes the earlier billing-blocked status. Codex did not repeat the request. Connectivity does not establish structured-output compatibility or scheduling success.
-- **M3A:** interactive offline Streamlit UI implemented with example and custom-day modes. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison. Focused conversion and AppTest coverage is included. No AI proposal generation or Meta agent integration is implemented.
-- **M3B:** AgentResult presentation and session invalidation merged via PR #4 (`0bae0ae`) and tested offline. All five terminal statuses are supported; successful plans are revalidated against current inputs before display. Provider invocation remains disconnected and AI generation remains disabled.
+- **M3A:** Streamlit example and custom-day input workflow implemented. Custom input converts to existing Pydantic contracts and runs the narrow hard-conflict check. Example mode retains the two-column hand-authored proposal comparison.
+- **M3B:** AgentResult presentation and session invalidation merged via PR #4 (`0bae0ae`) and tested offline. All five terminal statuses are supported; successful plans are revalidated against current inputs before display.
 - **M4A:** completed and merged via PR #5 (`c8390d4`), with 171 offline tests at that milestone: UI conversion → DayContext → agent → real SDK with MockTransport → Python validator → presentation/session binding and AppTest rendering. This establishes offline readiness only, not real Meta scheduling compatibility.
-- **M4B:** explicitly gated, single-request structured-output probe prepared for manual execution and technical review. No live structured scheduling request has been executed by Codex; Streamlit generation remains disabled.
+- **M4B:** merged via PR #6 (`c7f3b45`). The user reports the real Muse Spark 1.3 structured-output probe PASS: Python VALID, fixed call preserved, study rescheduled, unexpected busy window respected, zero activities postponed. This is one scenario, not proof of optimality or general reliability. Live correction remains **untested**.
+- **M4C:** Custom day generation wired behind an exact process opt-in and explicit button click, prepared for technical review. Offline verification: 232 tests passed (including AppTest), doctor PASS, pip check PASS, localhost Streamlit health/page HTTP 200 with live generation disabled. Default remains disabled. No real API request was made by Codex during M4C.
 
 **No fixture, text or validator result may be presented as live Muse output.**
 
@@ -43,21 +44,47 @@ Select **Example scenarios** to inspect the original A/B/C fixtures and their ha
 
 Select **Custom day** to enter 3–8 pending activities. Each row has a name, local start time, duration in minutes, priority and fixed/flexible status. Flexible activities can explicitly allow shortening with a minimum duration. IDs are generated from row positions so duplicate names remain distinct activities. Configure current time, day start/end and 0–10 unexpected busy windows. Changes update the preview immediately; malformed inputs show Pydantic errors instead of stale validation results.
 
-Custom mode displays the original activities and runs `detect_hard_conflicts()` only. Fixed activity conflicts with elapsed time, the day horizon, busy windows or other fixed activities are shown with codes and activity names. Absence of detected conflicts does **not** prove full feasibility or optimality; flexible activities are not replanned and no custom proposal is generated.
+Custom mode displays the original activities and runs `detect_hard_conflicts()`. Fixed activity conflicts with elapsed time, the day horizon, busy windows or other fixed activities are shown with codes and activity names. Absence of detected conflicts does **not** prove full feasibility or optimality. Flexible activities are replanned only after an explicitly enabled live generation click.
 
-The **Generate with AI (blocked)** button is disabled and has no request handler. Both modes operate offline. Times use whole local minutes within a single day; the UI accepts 00:00–23:59 and does not offer 24:00 or overnight windows. Inputs are session-local and are not saved to disk.
+The **Generate with Muse Spark** button is disabled by default and always disabled in Example scenarios. Ordinary imports, startup, input edits and rerenders send no API requests. Times use whole local minutes within a single day; the UI accepts 00:00–23:59 and does not offer 24:00 or overnight windows. Inputs/results are session-local and are not saved to disk. Live generation sends the captured day's context to Meta only after the user clicks.
 
-## Agent result presentation (M3B preparation)
+## Enable Custom day generation locally (M4C)
 
-The **Agent result** section currently shows that no result is available for the inputs. It never generates a demonstration AI result. Deterministic AgentResult fixtures exist only in presentation/AppTest tests, not in the application. Existing A/B/C proposals remain separately labeled hand-authored offline fixtures.
+After technical review, use your Windows ADMIN PowerShell session with the existing ignored `.env` containing `MODEL_API_KEY`. Do not copy or expose credentials to Codex, and do not overwrite `.env`.
 
-Data preparation is isolated in `core/presentation.py`; Streamlit rendering and session binding are in `ui/agent_result.py`. Neither invokes the agent, imports the Meta adapter, loads credentials nor sends requests. Actual orchestration/provider invocation remains in the existing core modules and is not wired to a UI event.
+```powershell
+Set-Location C:\Users\ADMIN\IdeaProjects\dayrescue
+git switch feat/m4c-live-streamlit
+$env:DAYRESCUE_ENABLE_LIVE_AI = "1"
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+Select **Custom day**, enter 3–8 activities and any busy windows, then click **Generate with Muse Spark** once. Only the exact process environment value `DAYRESCUE_ENABLE_LIVE_AI=1` enables the button; `.env` is not loaded to discover this gate. Enabling alone sends no request.
+
+`ui/live_generation.py` captures a DayContext snapshot and clears the previous result on a click. `core/live_generation.py` checks the gate again and passes the snapshot to `run_agent()`. Its lazy provider setup loads `.env` only when preflight permits the first proposal, with no environment override or interpolation. The model is pinned to `muse-spark-1.3`, reasoning `low`, existing JSON schema and 2048 completion tokens, default temperature, zero SDK retries, and 5-second connect/30-second read/write/pool timeouts. Fixed conflicts require zero provider requests and no credentials. Otherwise, a click permits one proposal and **one correction only if Python rejects the first proposal's hard constraints**. API errors, timeouts, truncation and malformed output terminate without correction/retry. Clients close in `finally`; setup/cleanup errors are sanitized too.
+
+Widget-change callbacks immediately invalidate the input fingerprint/result. A late result is rejected if its captured fingerprint is no longer active, and every rendered valid result is schema-checked and Python-revalidated against current inputs. Success shows the revised schedule, kept/moved/postponed activities and bounded trace. A separate **AI-generated rationale (not independently verified)** section uses plain text, capped at 1000 characters, only after validation; it is never executed or interpreted as instructions. The validator verifies hard constraints, not whether tradeoffs are useful or optimal.
+
+Do not repeatedly click after a provider failure; inspect the safe UI status and review access/configuration locally before authorizing another attempt. Live correction and this new UI flow have only offline MockTransport evidence so far; the user exercises real generation manually after review.
+
+To disable again, stop Streamlit with Ctrl+C, then restart without the flag:
+
+```powershell
+Remove-Item Env:DAYRESCUE_ENABLE_LIVE_AI -ErrorAction SilentlyContinue
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+## Agent result presentation
+
+The **Agent result** section shows a result only after an enabled Custom day click. It never generates a demonstration AI result. Deterministic AgentResult fixtures exist only in tests, not in the application. Existing A/B/C proposals remain separately labeled hand-authored offline fixtures.
+
+Data preparation is isolated in `core/presentation.py`; Streamlit rendering and session binding are in `ui/agent_result.py`. Neither invokes the agent, imports the Meta adapter, loads credentials nor sends requests. The separate `ui/live_generation.py` click handler delegates invocation to `core/live_generation.py`.
 
 For a `valid` terminal status, the presentation layer requires a plan and a successful stored validation, rechecks its schema and reruns `validate_plan()` for the current context. Only then does it show VALID, the proposed schedule and freshly derived kept/moved/postponed activity summaries. For `infeasible`, it recomputes fixed-constraint conflicts. For `invalid`, it explains that no valid proposal was found within two attempts, without claiming the day is impossible. `provider_error` and `malformed_proposal` show fixed safe errors and suppress any stale plan, success or summaries.
 
-The collapsed execution trace displays at most three events (preflight plus two attempts) and ten known codes per event. Unknown metadata/codes are replaced with safe placeholders; raw exception bodies and model explanations are not rendered. The code allowlist is for presentation sanitization, not a second set of scheduling rules.
+The collapsed execution trace displays at most three events (preflight plus two attempts) and ten known codes per event. Unknown metadata/codes are replaced with safe placeholders; raw exception bodies and model explanations never appear in the trace. The code allowlist is for presentation sanitization, not a second set of scheduling rules. Valid proposals alone can show their separately labeled plain-text rationale.
 
-Session results are stored with a SHA-256 fingerprint of the mode/scenario and complete canonical DayContext. Changes to meaningful inputs, invalid input or switching modes/scenarios clear the saved result. Returning to old inputs does not restore an old result. The future `store_agent_result()` hook also rejects results for an input that is no longer current; `current_agent_result()` checks the binding again on every rerender. This is session-local preparation, with no persistence or background generation.
+Session results are stored with a SHA-256 fingerprint of the mode/scenario and complete canonical DayContext. Changes to meaningful inputs, invalid input or switching modes/scenarios clear the saved result. Returning to old inputs does not restore an old result. `store_agent_result()` rejects results for an input that is no longer current; `current_agent_result()` checks the binding again on every rerender. There is no persistence or background generation.
 
 ## Domain contracts
 
@@ -71,7 +98,7 @@ All times are local integer minutes since midnight, e.g. 09:30 = 570, using half
 - Scenario B (unexpected visitor) — study shifts around a new busy interval, a fixed call stays.
 - Scenario C (impossible) — an unavoidable busy interval conflicts with an immutable meeting; validator rejects the plan.
 
-These deterministic fixtures establish the Python contracts only; later the real Muse Spark model must generate proposals that pass this same validation.
+These deterministic fixtures establish the Python contracts only. The separate real M4B probe and any enabled Custom day proposals must pass the same Python validation.
 
 ## Offline agent orchestration (M2A)
 
@@ -89,7 +116,7 @@ Terminal statuses:
 
 All failure statuses return `plan=None`. `validation` holds the last completed Python validation, if any, including when a later provider call fails; `issues` exposes those issues or preflight conflicts. `attempts` counts actual provider invocations, including failed ones, and never exceeds two. The trace starts with preflight at attempt 0, followed by one event per provider call: validation outcome and issue codes, or `PROVIDER_ERROR`/`MALFORMED_PROPOSAL`. It excludes raw exception text and schedule content. The agent does not log, execute model text, load credentials or make HTTP requests itself.
 
-Run `.\.venv\Scripts\python.exe -m pytest -q` for the complete offline suite. Agent tests block requests/httpx calls. Meta adapter tests use the real SDK with `httpx.MockTransport` and block socket connections. Presentation tests block HTTP and agent invocation, allowing only the localhost socketpair required by Windows asyncio. Real model behavior remains unverified; Streamlit AI generation remains disabled.
+Run `.\.venv\Scripts\python.exe -m pytest -q` for the complete offline suite, including Streamlit AppTest. `tests/conftest.py` disables live generation by default for tests and blocks real HTTP/external socket connections; individual click tests opt in with MockTransport/test doubles only. Windows asyncio's internal localhost socketpair remains permitted. Offline test results are never real model output.
 
 ## Meta provider adapter (M2B, offline verification only)
 
@@ -101,7 +128,7 @@ Optional `reasoning_effort` configures the documented Meta effort levels; when o
 
 Empty responses, malformed envelopes/JSON/proposals, truncation (`finish_reason=length`), unexpected finish reasons, refusals, tool calls, missing credentials, SDK failures and timeouts raise `MetaProviderError` with a fixed code. Raw model output and SDK exception bodies are excluded from its public message/traceback. No repair request or fallback is attempted. A model-provided `valid` field is rejected by the existing schema. Parsing alone is not semantic validation: `run_agent()` still passes each returned proposal to the unchanged Python validator. Adapter exceptions become the agent's existing `provider_error` status with generic `PROVIDER_ERROR` trace; the adapter's more specific code is available when handling `MetaProviderError` directly.
 
-**API evidence and remaining assumptions (reviewed 2026-10-30):** Meta's [Chat Completions guide](https://dev.meta.ai/docs/protocols/chat-completions) documents the model, developer role, `max_completion_tokens`, top-level `reasoning_effort` and default temperature; its [structured output guide](https://dev.meta.ai/docs/structured-output) documents `json_schema` and non-strict schema normalization. The [reasoning guide](https://dev.meta.ai/docs/reasoning) confirms `low` support and that reasoning consumes the output budget. The installed SDK's timeout/retry behavior is verified by transport tests. Acceptance of this exact generated schema (including `$defs` and constraints), the combined settings, sufficient reasoning/output budget, live latency and scheduling quality remain unverified. No mocked result is evidence of live Meta scheduling compatibility or Muse output.
+**API evidence and remaining assumptions (reviewed 2026-10-30):** Meta's [Chat Completions guide](https://dev.meta.ai/docs/protocols/chat-completions) documents the model, developer role, `max_completion_tokens`, top-level `reasoning_effort` and default temperature; its [structured output guide](https://dev.meta.ai/docs/structured-output) documents `json_schema` and non-strict schema normalization. The [reasoning guide](https://dev.meta.ai/docs/reasoning) confirms `low` support and that reasoning consumes the output budget. The installed SDK's timeout/retry behavior is verified by transport tests. The user verified these settings for one real M4B scenario. Arbitrary custom-day quality, budget sufficiency across scenarios, latency and live correction remain unverified. No mocked result is evidence of live Muse output.
 
 ## Offline end-to-end readiness (M4A)
 
@@ -109,11 +136,11 @@ Run `.\.venv\Scripts\python.exe -m pytest tests/test_integration.py -q` for focu
 
 Coverage includes validated Late Start and Unexpected Event plans, immutable conflicts with zero provider requests, invalid→valid correction with exact feedback, two invalid proposals, timeout/HTTP failures, malformed proposal JSON and stale input/result invalidation. Request counts are checked at the HTTP transport boundary: at most two per agent run, zero SDK retries and finite timeouts. Tests also check that credentials/raw errors are absent from traces and that ordinary production UI rerenders never invoke MetaProvider. Real HTTP transport is blocked; localhost socketpairs are allowed solely for Windows asyncio.
 
-All encoded completion envelopes and failure responses are test code. The production UI still offers only the labeled hand-authored fixtures and custom deterministic preflight; it does not run mock generation or real generation. B/C integration inputs retain the existing domain fixtures' minimal activity counts; custom UI's 3–8 count is covered separately by AppTest. Malformed JSON from the Meta adapter raises a sanitized adapter error and therefore reaches presentation as the existing `provider_error` status, without attempting a correction.
+All encoded completion envelopes and failure responses are test code. The production UI never runs mock generation; live generation requires the M4C gate and explicit click. B/C integration inputs retain the existing domain fixtures' minimal activity counts; custom UI's 3–8 count is covered separately by AppTest. Malformed JSON from the Meta adapter raises a sanitized adapter error and therefore reaches presentation as the existing `provider_error` status, without attempting a correction.
 
 ## Structured-output probe (M4B, manual execution only)
 
-The connectivity smoke has passed; **live scheduling success is still unverified**. Codex prepares and tests this script offline, then stops. The user runs it from their own Windows ADMIN PowerShell session, where the ignored local `.env` already exists. Do not copy or expose credentials to a sandbox or chat.
+The user has already verified the single M4B request as Python VALID. No repeat probe is required for M4C. The commands below document the standalone probe for future separately authorized diagnosis. Codex never runs it live. Credentials stay in the user's ignored local `.env`.
 
 From the repository root, this command sends **zero requests** and does not load `.env`:
 
@@ -121,7 +148,7 @@ From the repository root, this command sends **zero requests** and does not load
 .\.venv\Scripts\python.exe scripts\live_structured_probe.py
 ```
 
-After technical review, the user can run this command **once** for the first live structured request:
+For a separately authorized single diagnostic request, the user can run:
 
 ```powershell
 Set-Location C:\Users\ADMIN\IdeaProjects\dayrescue
@@ -136,26 +163,26 @@ The JSON report distinguishes schema parse SUCCESS/FAILURE from Python VALID/INV
 
 Run all automated tests offline with `.\.venv\Scripts\python.exe -m pytest -q`. Focused probe tests are in `tests/test_live_structured_probe.py`; all fake responses and alternate test providers stay in tests. They block real HTTP and sockets and also exercise the production adapter/SDK with MockTransport.
 
-## Remaining checks before Streamlit activation
+## Remaining manual verification
 
-1. Review the user's single live probe report: exact schema acceptance, nonempty JSON with `finish_reason=stop`, Python constraint results and actual scheduling quality. Connectivity alone proves none of these.
-2. If that passes, separately authorize further live scenario and bounded correction checks, including actual request counts, latency and safe failures. M4B deliberately does not exercise a second correction request.
-3. Require technical review and explicit authorization before connecting the Generate button. Preserve current-input revalidation, input fingerprint binding and the two-request agent ceiling; ordinary rerenders must send no requests.
+1. After M4C technical review, manually enable and exercise Custom day generation from the user's Windows ADMIN session. Review real schedule quality, tradeoffs and latency; M4B established only one scenario.
+2. Live correction remains untested. A Custom day click authorizes at most two requests, with a second only after deterministic rejection; do not fabricate or claim a live correction success from offline tests.
+3. Confirm input edits clear results, rerenders send no requests and provider failures safely terminate. M4C verifies these offline through the production click path with real SDK/MockTransport.
 4. Confirm `.env` remains ignored/untracked and the repository remains private until the user authorizes publication. Do not modify billing settings.
 
-Streamlit generation remains disabled and disconnected throughout M4B. Offline MockTransport results are deterministic Python tests, never live Muse output.
+Streamlit generation remains disabled unless manually opted in. Offline MockTransport results are deterministic Python tests, never live Muse output.
 
 ## Three-minute offline demo outline
 
 | Time | Show and say |
 | --- | --- |
-| 0:00–0:20 | Explain the interrupted-day problem and state: this is an offline deterministic preview; connectivity passed separately, live scheduling is unverified. |
+| 0:00–0:20 | Explain the interrupted-day problem and state: this demo is an offline deterministic preview; connectivity and one structured scenario passed separately. |
 | 0:20–0:55 | Example A: postponed reading and preserved fixed appointment. Point to the **hand-authored fixture** label and Python validation. |
 | 0:55–1:25 | Example B: study moves around the visitor; the fixed call stays. These are fixture proposals, not Muse output. |
 | 1:25–1:50 | Example C: immutable meeting/busy conflict is rejected. Explain the integration test proves agent preflight makes zero transport requests here. |
 | 1:50–2:25 | Custom day: enter three pending activities, mark one fixed and add a conflicting busy window. Show hard-conflict feedback; no AI plan is generated. |
 | 2:25–2:50 | Show `python -m pytest tests/test_integration.py -v`: full mocked SDK-to-presentation path, bounded correction and safe errors. The result rendering harness exists only in tests. |
-| 2:50–3:00 | State the boundary: offline pipeline verified; live scheduling compatibility and production generation await the manual probe, authorized tests and review. |
+| 2:50–3:00 | State the boundary: offline pipeline verified; gated live UI is prepared, and live correction remains untested. |
 
 ## Connectivity smoke record (already passed)
 
@@ -163,13 +190,13 @@ The user verified `scripts/smoke_meta.py` in the Windows ADMIN session: model `m
 
 ## Git
 
-The repository is published privately. M0–M4A are complete; PR #5 merged M4A into `main`. M4B uses a separate review branch:
+The repository is published privately. M0–M4B are merged into `main`; PR #6 merged M4B. M4C uses a separate review branch:
 
 ```powershell
-git switch feat/m4b-live-probe
+git switch feat/m4c-live-streamlit
 git status --short
 git ls-files .env  # must output nothing
-git push -u origin feat/m4b-live-probe
+git push -u origin feat/m4c-live-streamlit
 ```
 
 If pushing fails, inspect `gh auth status` and your repository state. Never force push or merge automatically. The repo remains private; the user must authorize making it public before submitting the hackathon entry.
@@ -179,12 +206,12 @@ If pushing fails, inspect `gh auth status` and your repository state. Never forc
 - M1: offline validator and contracts (implemented and locally verified).
 - M2A: provider-independent orchestration, bounded correction loop and offline unit tests (implemented and merged via PR #2).
 - M2B: Meta adapter and SDK transport tests (implemented offline and merged via PR #3).
-- Live M2: connectivity smoke passed in the user's local session; real Muse Spark scheduling/correction remains unverified.
+- Live M2: connectivity smoke and one structured scheduling probe passed in the user's local session; live correction remains unverified.
 - M3A: interactive offline inputs, deterministic constraint feedback and example comparison (implemented and merged via PR #1).
 - M3B: safe agent result presentation, session invalidation and AppTest coverage (merged via PR #4).
-- Later M3 work requires separate authorization and verified live scheduling before UI integration.
+- M4C: explicitly gated Custom day generation, safe presentation and offline click-to-SDK/AppTest coverage prepared for review. The user manually enables and exercises live generation after review.
 - M4A: offline integration tests, activation checklist and honest three-minute demo outline (completed and merged via PR #5).
-- M4B: gated structured-output probe and offline tests prepared; user executes the first live structured request manually, then technical review. No automatic merge or UI activation.
+- M4B: merged via PR #6; user's manual structured probe passed Python validation with no postponed activities. No real requests were made by Codex.
 - M5–M6: README, 3-minute video and submission.
 
 ### References

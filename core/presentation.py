@@ -36,6 +36,7 @@ class AgentPresentation:
     dispositions: tuple[tuple[str, tuple[str, ...]], ...] = ()
     issues: tuple[str, ...] = ()
     trace: tuple[dict, ...] = ()
+    rationale: str = ""
 
 
 def input_fingerprint(context: DayContext, scope: str) -> str:
@@ -94,4 +95,5 @@ def prepare_agent_result(context: DayContext, result: AgentResult) -> AgentPrese
         ("Postponed", validation.postponed_ids),
     ))
     return AgentPresentation(status, "VALID — Python revalidated this proposal for the current inputs.",
-                             True, schedule, dispositions, trace=trace)
+                             True, schedule, dispositions, trace=trace,
+                             rationale=plan.explanation[:1000])

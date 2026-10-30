@@ -1,4 +1,4 @@
-"""Offline validator preview, explicitly NOT a Meta AI demo."""
+"""Deterministic examples and explicitly enabled Custom day Muse Spark generation."""
 
 from datetime import time
 
@@ -8,7 +8,8 @@ from pydantic import ValidationError
 from core.scenarios import impossible_day, late_start, unexpected_event
 from core.ui_input import build_day_context
 from core.validator import detect_hard_conflicts, validate_plan
-from ui.agent_result import show_current_agent_result
+from ui.agent_result import invalidate_agent_result, show_current_agent_result
+from ui.live_generation import show_live_generation
 
 
 def clock(minutes: int) -> str:
@@ -67,34 +68,34 @@ def custom_day():
     st.subheader("Create a custom day")
     st.caption("Enter 3–8 pending activities. All times are local, within one day (00:00–23:59).")
     columns = st.columns(3)
-    now = columns[0].time_input("Current time", time(8), step=60)
-    start = columns[1].time_input("Day start", time(7), step=60)
-    end = columns[2].time_input("Day end", time(22), step=60)
-    count = st.number_input("Number of pending activities", min_value=3, max_value=8, value=3)
+    now = columns[0].time_input("Current time", time(8), step=60, on_change=invalidate_agent_result)
+    start = columns[1].time_input("Day start", time(7), step=60, on_change=invalidate_agent_result)
+    end = columns[2].time_input("Day end", time(22), step=60, on_change=invalidate_agent_result)
+    count = st.number_input("Number of pending activities", min_value=3, max_value=8, value=3, on_change=invalidate_agent_result)
     activities = []
     for index in range(count):
         prefix = f"activity_{index + 1}"
         with st.expander(f"Activity {index + 1}", expanded=True):
-            title = st.text_input("Name", f"Activity {index + 1}", key=f"{prefix}_name")
+            title = st.text_input("Name", f"Activity {index + 1}", key=f"{prefix}_name", on_change=invalidate_agent_result)
             columns = st.columns(3)
-            activity_start = columns[0].time_input("Start time", time(9 + index), step=60, key=f"{prefix}_start")
-            duration = columns[1].number_input("Duration (minutes)", value=60, step=1, key=f"{prefix}_duration")
-            priority = columns[2].selectbox("Priority", ["high", "medium", "low"], index=1, key=f"{prefix}_priority")
-            fixed = st.checkbox("Fixed activity", key=f"{prefix}_fixed", help="Fixed activities must keep their original start and duration.")
+            activity_start = columns[0].time_input("Start time", time(9 + index), step=60, key=f"{prefix}_start", on_change=invalidate_agent_result)
+            duration = columns[1].number_input("Duration (minutes)", value=60, step=1, key=f"{prefix}_duration", on_change=invalidate_agent_result)
+            priority = columns[2].selectbox("Priority", ["high", "medium", "low"], index=1, key=f"{prefix}_priority", on_change=invalidate_agent_result)
+            fixed = st.checkbox("Fixed activity", key=f"{prefix}_fixed", help="Fixed activities must keep their original start and duration.", on_change=invalidate_agent_result)
             minimum = None
-            if not fixed and st.checkbox("Allow shortening", key=f"{prefix}_shorten"):
-                minimum = st.number_input("Minimum duration (minutes)", value=30, step=1, key=f"{prefix}_minimum")
+            if not fixed and st.checkbox("Allow shortening", key=f"{prefix}_shorten", on_change=invalidate_agent_result):
+                minimum = st.number_input("Minimum duration (minutes)", value=30, step=1, key=f"{prefix}_minimum", on_change=invalidate_agent_result)
             activities.append({"id": prefix, "title": title.strip(), "start_time": activity_start,
                                "duration_minutes": duration, "priority": priority,
                                "fixed": fixed, "min_duration_minutes": minimum})
-    busy_count = st.number_input("Number of unexpected busy windows", min_value=0, max_value=10, value=0)
+    busy_count = st.number_input("Number of unexpected busy windows", min_value=0, max_value=10, value=0, on_change=invalidate_agent_result)
     busy = []
     for index in range(busy_count):
         with st.expander(f"Busy window {index + 1}", expanded=True):
-            label = st.text_input("Busy window label", "Unexpected event", key=f"busy_{index}_label")
+            label = st.text_input("Busy window label", "Unexpected event", key=f"busy_{index}_label", on_change=invalidate_agent_result)
             columns = st.columns(2)
-            busy_start = columns[0].time_input("Busy start", time(13), step=60, key=f"busy_{index}_start")
-            busy_end = columns[1].time_input("Busy end", time(14), step=60, key=f"busy_{index}_end")
+            busy_start = columns[0].time_input("Busy start", time(13), step=60, key=f"busy_{index}_start", on_change=invalidate_agent_result)
+            busy_end = columns[1].time_input("Busy end", time(14), step=60, key=f"busy_{index}_end", on_change=invalidate_agent_result)
             busy.append({"label": label, "start_time": busy_start, "end_time": busy_end})
     try:
         context = build_day_context(now=now, day_start=start, day_end=end,
@@ -113,22 +114,20 @@ def custom_day():
         return
     show_original(context)
     show_preflight(context)
-    show_current_agent_result(context, "custom")
+    show_live_generation(context)
 
 
 st.set_page_config(page_title="DayRescue", page_icon="🛟", layout="wide")
 st.title("DayRescue")
 st.caption("When Life Interrupts, Your Plan Adapts.")
-st.warning("OFFLINE VALIDATOR PREVIEW — deterministic Python checks only. Meta API access is blocked.")
-st.subheader("AI generation — unavailable")
-st.button("Generate with AI (blocked)", disabled=True)
-st.caption("No AI requests are made. No AI proposal is generated in either input mode.")
-mode = st.radio("Input mode", ["Example scenarios", "Custom day"], horizontal=True)
+mode = st.radio("Input mode", ["Example scenarios", "Custom day"], horizontal=True, on_change=invalidate_agent_result)
 if mode == "Custom day":
     custom_day()
     st.stop()
 
-choice = st.selectbox("Choose a deterministic test scenario", list(SCENARIOS))
+st.info("Examples use deterministic Python checks and hand-authored proposals. Live generation is available only in Custom day when enabled.")
+st.button("Generate with Muse Spark", disabled=True)
+choice = st.selectbox("Choose a deterministic test scenario", list(SCENARIOS), on_change=invalidate_agent_result)
 st.caption("OFFLINE, HAND-AUTHORED FIXTURE — not Meta/Muse Spark model output.")
 context, proposal = SCENARIOS[choice]()
 result = validate_plan(context, proposal)
@@ -172,7 +171,6 @@ st.write(
     f"postponed={result.postponed_ids}"
 )
 st.caption(
-    "The real Muse Spark agent will generate proposed plans after Meta removes the "
-    "account restriction. This preview never calls an AI model."
+    "These example proposals are hand-authored fixtures. Example mode never calls an AI model."
 )
 show_current_agent_result(context, f"example:{choice}")

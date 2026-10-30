@@ -3,10 +3,10 @@
 The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total budget**. Do not expand the MVP.
 
 ## Current reality
-- The Meta account has $150 credits and a payment method, but on 2026-10-28 it displayed: "Your account is restricted. We weren't able to place a temporary hold on your payment method." Event organizers are being asked for a resolution.
-- Live Meta API smoke test is **BLOCKED**, not PASS. Do not invent successes.
+- The earlier payment restriction was superseded by the user's verified local connectivity smoke: PASS, muse-spark-1.3, DAYRESCUE_READY, 382 total tokens.
+- The user also verified the single live structured-output probe: Python VALID, fixed call preserved, study rescheduled, unexpected busy window respected, zero postponements. Live correction has NOT been tested. Do not invent further live successes.
 - M0 Windows bootstrap is verified: Python 3.13.1, local `.venv`, dependencies, Streamlit startup, clean initial commit `06cb2c6`, and private GitHub repo `trungthanh1909/dayrescue`.
-- M1 models, validator and all 30 original deterministic tests passed local verification. M3A is merged via PR #1 (`9e69011`), M2A via PR #2 (`9315b97`), M2B via PR #3 (`9a42a47`) and M3B presentation via PR #4 (`0bae0ae`). M4A adds full offline pipeline integration tests. Live requests must wait for restored access and explicit authorization.
+- M0–M4B are merged; M4A via PR #5 (`c8390d4`), M4B via PR #6 (`c7f3b45`). M4C prepares gated Custom day generation on a separate review branch. Codex must not make real generation requests.
 - Codex app with Windows local workspace is the user's coding workflow, not Antigravity.
 
 ## Security and scope
@@ -17,11 +17,11 @@ The Meta Global AI Developer Hackathon 2026 project has a **strict 15-hour total
 - Offline fixture results must be described as deterministic Python tests, **not Muse model output**.
 - Never automatically retry API calls under a billing restriction. The user will explicitly authorize a new smoke test when access is restored.
 
-## Current workflow (M4A end-to-end readiness, offline only)
+## Current workflow (M4C gated Streamlit generation, offline verification only)
 1. Preserve the existing models, deterministic validator and A/B/C hand-authored fixtures unless a reproducible bug requires a fix.
 2. Use `.venv/Scripts/python.exe` for doctor, pytest (including Streamlit AppTest) and the offline demo. UI time conversion lives in `core/ui_input.py`; domain validation stays in the existing Pydantic models.
 3. Custom day accepts 3–8 pending activities and 0–10 busy windows. Its input preflight uses `detect_hard_conflicts()`; no detected conflicts must never be described as proof of full feasibility. Any stored valid AgentResult must be revalidated against current inputs before display.
-4. Keep AI generation disabled while Meta API access is blocked. Example proposals remain explicitly hand-authored and offline.
-5. Work on `feat/m4a-e2e-readiness` from updated `main`. Integration tests in `tests/test_integration.py` must exercise input conversion, real SDK with MockTransport, agent, Python validator and presentation together. Keep fake completion/error responses in tests only; block real HTTP transport and external sockets. Verify at most two requests, zero SDK retries, finite timeouts, safe traces and stale-result invalidation. Preserve production code unless a reproducible bug requires a fix. Prepare README's activation checklist and honest offline demo outline. Do not call live Meta, modify billing settings, connect UI provider invocation or add application stubs. Commit and push for review; do not merge or enable live generation automatically.
+4. Live generation defaults to disabled and requires the launching process to contain `DAYRESCUE_ENABLE_LIVE_AI=1`, then an explicit Custom day button click. Load local `.env` only at invocation, never to discover the gate. Example proposals remain explicitly hand-authored and offline.
+5. Work on `feat/m4c-live-streamlit` from updated `main`. Reuse MetaProvider, run_agent, Python validator, fingerprint binding and presentation. Pin muse-spark-1.3 with low reasoning, existing 2048 token limit, zero SDK retries and finite timeouts; at most one correction after deterministic rejection. Close clients, sanitize errors, reject stale results and revalidate before VALID/rationale display. Keep fake completions/providers in tests only; block real HTTP and external sockets in automated checks. Run full pytest/AppTest, doctor, pip check and local Streamlit startup verification. Do not launch real generation, modify billing settings or merge automatically. Commit and push for technical review; the user enables and exercises live generation manually in their own Windows ADMIN session.
 6. Confirm `.env` is not tracked. Keep the GitHub repository private until the user authorizes making it public before final submission.
-7. Stop after M4A and report real verification results and remaining blockers. Test fixtures are never evidence of live Muse output; offline readiness is not real Meta compatibility.
+7. Stop after M4C preparation and report real verification results and remaining issues. Test fixtures are never evidence of live Muse output; live correction remains unverified until the user explicitly tests it.

@@ -1,1 +1,1 @@
-"""Streamlit presentation helpers; no provider invocation."""
+"""Streamlit presentation and explicitly gated generation controls."""
