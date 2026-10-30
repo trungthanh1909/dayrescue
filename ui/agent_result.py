@@ -13,6 +13,12 @@ INPUT_KEY = "agent_input_fingerprint"
 RESULT_KEY = "agent_result"
 
 
+def invalidate_agent_result() -> None:
+    """Widget callback: invalidate the binding before the next script rerun."""
+    st.session_state.pop(RESULT_KEY, None)
+    st.session_state[INPUT_KEY] = None
+
+
 @dataclass(frozen=True)
 class SavedAgentResult:
     fingerprint: str
@@ -20,7 +26,7 @@ class SavedAgentResult:
 
 
 def store_agent_result(state: MutableMapping, context: DayContext, scope: str, result: AgentResult) -> bool:
-    """Future invocation code may store only results for the currently displayed input."""
+    """Invocation code may store only results for the currently displayed input."""
     fingerprint = input_fingerprint(context, scope)
     if state.get(INPUT_KEY) != fingerprint:
         return False
@@ -53,6 +59,9 @@ def render_agent_result(context: DayContext, result: AgentResult) -> None:
             st.caption("No activities scheduled; see postponed activities below.")
         for label, names in view.dispositions:
             st.write(f"**{label}:** " + (", ".join(names) or "None"))
+        if view.rationale:
+            st.subheader("AI-generated rationale (not independently verified)")
+            st.text(view.rationale)
     else:
         st.error(view.message)
         st.caption("Validation outcome: no accepted plan for the current inputs.")
@@ -70,4 +79,4 @@ def show_current_agent_result(context: DayContext | None, scope: str) -> None:
     if result is not None:
         render_agent_result(context, result)
     else:
-        st.caption("No agent result for these inputs. Live AI generation remains disabled.")
+        st.caption("No agent result for these inputs.")
