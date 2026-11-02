@@ -121,3 +121,59 @@ def test_duplicate_names_keep_distinct_ids_and_mode_switches_work():
     app.radio[0].set_value("Custom day").run()
     assert not app.success
     assert not app.exception
+
+
+@pytest.mark.parametrize("with_result", [False, True])
+def test_dense_conflicts_grouped_with_full_details_once(with_result):
+    from core.agent import run_agent
+    from core.models import Activity, BusyWindow, DayContext
+    from core.validator import detect_hard_conflicts
+    from ui.agent_result import INPUT_KEY, RESULT_KEY, SavedAgentResult
+
+    app = custom_app()
+    app.number_input[0].set_value(8).run()
+    for i in range(1, 9):
+        app.checkbox(key=f"activity_{i}_fixed").check()
+        app.time_input(key=f"activity_{i}_start").set_value(time(9))
+    app.number_input[-1].set_value(10).run()
+    for i in range(10):
+        app.time_input(key=f"busy_{i}_start").set_value(time(9))
+        app.time_input(key=f"busy_{i}_end").set_value(time(10))
+    app.run()
+    context = DayContext(now_minute=480, day_start_minute=420, day_end_minute=1320,
+        activities=[Activity(id=f"activity_{i}", title=f"Activity {i}", start_minute=540,
+                             duration_minutes=60, fixed=True) for i in range(1, 9)],
+        busy_windows=[BusyWindow(start_minute=540, end_minute=600, label="Unexpected event") for _ in range(10)])
+    conflicts = detect_hard_conflicts(context)
+    assert len(conflicts) == 108
+    if with_result:
+        result = run_agent(context, lambda request: pytest.fail("Preflight must not invoke provider"))
+        assert result.attempts == 0
+        assert list(result.hard_conflicts) == conflicts
+        app.session_state[RESULT_KEY] = SavedAgentResult(app.session_state[INPUT_KEY], result)
+        app.run()
+        assert any("check above" in item.value for item in app.caption)
+    details = [item for item in app.expander if item.label == "Full hard-conflict details"]
+    assert len(details) == 1
+    assert details[0].proto.expanded is False
+    assert len(details[0].markdown) == 108
+    assert [item.value for item in details[0].markdown] == [f"**{i.code}**: {i.message}" for i in conflicts]
+    assert any(item.value == "**FIXED_BUSY_CONFLICT**: 80 conflicts" for item in app.markdown)
+    assert any(item.value == "**FIXED_FIXED_CONFLICT**: 28 conflicts" for item in app.markdown)
+    affected = [item.value for item in app.caption if item.value.startswith("Affected activities:")]
+    assert len(affected) == 2
+    assert all(f"Activity {i} (activity_{i})" in row for row in affected for i in range(1, 9))
+    assert any("108 hard conflicts" in item.value for item in app.caption)
+    assert app.error and not app.success and not app.exception
+    assert app.button(key="generate_live_ai").disabled
+
+
+def test_example_b_proposed_status_matches_original():
+    app = AppTest.from_file(str(APP)).run()
+    app.selectbox[0].select_index(1).run()
+    original = app.dataframe[0].value.set_index("Activity")
+    proposed = app.dataframe[2].value.set_index("Activity")
+    assert proposed.loc["Fixed call", "Status"] == original.loc["Fixed call", "Status"] == "Fixed"
+    assert proposed.loc["Study", "Status"] == original.loc["Study", "Status"] == "Flexible"
+    assert any("HAND-AUTHORED" in item.value for item in app.caption)
+    assert app.button[0].disabled and not app.exception

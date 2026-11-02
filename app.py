@@ -10,6 +10,7 @@ from core.ui_input import build_day_context
 from core.validator import detect_hard_conflicts, validate_plan
 from ui.agent_result import invalidate_agent_result, show_current_agent_result
 from ui.live_generation import show_live_generation
+from ui.conflicts import show_conflicts
 
 
 def clock(minutes: int) -> str:
@@ -51,10 +52,7 @@ def show_preflight(context):
     conflicts = detect_hard_conflicts(context)
     if conflicts:
         st.error("Hard conflicts detected in immutable activities.")
-        names = {a.id: a.title for a in context.activities}
-        for issue in conflicts:
-            st.write(f"**{issue.code}**: {issue.message}")
-            st.caption("Activities: " + ", ".join(names[item] for item in issue.activity_ids))
+        show_conflicts(context, conflicts)
     else:
         st.info("No fixed-constraint conflicts detected.")
     st.caption(
@@ -114,7 +112,7 @@ def custom_day():
         return
     show_original(context)
     show_preflight(context)
-    show_live_generation(context)
+    show_live_generation(context, conflicts_shown=True)
 
 
 st.set_page_config(page_title="DayRescue", page_icon="🛟", layout="wide")
@@ -145,6 +143,7 @@ with right:
                 "Activity": by_id[item.activity_id].title,
                 "Start": clock(item.start_minute),
                 "End": clock(item.end_minute),
+                "Status": "Fixed" if by_id[item.activity_id].fixed else "Flexible",
             }
             for item in sorted(proposal.scheduled, key=lambda item: item.start_minute)
             if item.activity_id in by_id

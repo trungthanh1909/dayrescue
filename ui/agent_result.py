@@ -7,7 +7,10 @@ import streamlit as st
 
 from core.agent import AgentResult
 from core.models import DayContext
+from core.validator import detect_hard_conflicts
 from core.presentation import input_fingerprint, prepare_agent_result
+
+from .conflicts import show_conflicts
 
 INPUT_KEY = "agent_input_fingerprint"
 RESULT_KEY = "agent_result"
@@ -47,7 +50,7 @@ def current_agent_result(state: MutableMapping, context: DayContext | None, scop
     return saved.result
 
 
-def render_agent_result(context: DayContext, result: AgentResult) -> None:
+def render_agent_result(context: DayContext, result: AgentResult, *, conflicts_shown: bool = False) -> None:
     view = prepare_agent_result(context, result)
     st.caption(f"Agent terminal status: {view.status}")
     if view.validated:
@@ -65,18 +68,25 @@ def render_agent_result(context: DayContext, result: AgentResult) -> None:
     else:
         st.error(view.message)
         st.caption("Validation outcome: no accepted plan for the current inputs.")
-        for issue in view.issues:
-            st.write(issue)
+        conflicts = detect_hard_conflicts(context) if view.status == "infeasible" else []
+        if conflicts:
+            if conflicts_shown:
+                st.caption("See the deterministic hard-conflict check above for counts, affected activities and full details.")
+            else:
+                show_conflicts(context, conflicts)
+        else:
+            for issue in view.issues:
+                st.write(issue)
     with st.expander("Agent execution trace"):
         if view.trace:
             st.dataframe(list(view.trace), hide_index=True, width="stretch")
         st.caption("At most one preflight and two proposal attempts. Trace shows metadata only.")
 
 
-def show_current_agent_result(context: DayContext | None, scope: str) -> None:
+def show_current_agent_result(context: DayContext | None, scope: str, *, conflicts_shown: bool = False) -> None:
     result = current_agent_result(st.session_state, context, scope)
     st.subheader("Agent result")
     if result is not None:
-        render_agent_result(context, result)
+        render_agent_result(context, result, conflicts_shown=conflicts_shown)
     else:
         st.caption("No agent result for these inputs.")

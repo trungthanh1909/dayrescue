@@ -9,7 +9,7 @@ from .agent_result import (
 )
 
 
-def show_live_generation(context: DayContext) -> None:
+def show_live_generation(context: DayContext, *, conflicts_shown: bool = False) -> None:
     current_agent_result(st.session_state, context, "custom")
     enabled = live_ai_enabled()
     st.subheader("Muse Spark generation")
@@ -26,4 +26,4 @@ def show_live_generation(context: DayContext) -> None:
         if not store_agent_result(st.session_state, snapshot, "custom", result):
             st.info("Inputs changed during generation. Generate again for the current day.")
             return
-    show_current_agent_result(context, "custom")
+    show_current_agent_result(context, "custom", conflicts_shown=conflicts_shown)
