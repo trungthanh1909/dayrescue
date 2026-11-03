@@ -11,6 +11,7 @@ from core.validator import detect_hard_conflicts
 from core.presentation import input_fingerprint, prepare_agent_result
 
 from .conflicts import show_conflicts
+from .planner import prepare_comparison, render_comparison, render_outcome, readable_caption
 
 INPUT_KEY = "agent_input_fingerprint"
 RESULT_KEY = "agent_result"
@@ -52,41 +53,45 @@ def current_agent_result(state: MutableMapping, context: DayContext | None, scop
 
 def render_agent_result(context: DayContext, result: AgentResult, *, conflicts_shown: bool = False) -> None:
     view = prepare_agent_result(context, result)
-    st.caption(f"Agent terminal status: {view.status}")
-    if view.validated:
-        st.success(view.message)
-        st.subheader("Python-validated proposed schedule")
-        if view.schedule:
-            st.dataframe(list(view.schedule), hide_index=True, width="stretch")
-        else:
-            st.caption("No activities scheduled; see postponed activities below.")
-        for label, names in view.dispositions:
-            st.write(f"**{label}:** " + (", ".join(names) or "None"))
+    comparison = prepare_comparison(context, result.plan) if view.validated else None
+    if view.validated and comparison is not None:
+        render_outcome(comparison[1])
+        readable_caption("Muse-generated proposal · Python checked the hard constraints for these inputs. Review the tradeoffs.")
+        render_comparison(context, comparison, original_details=False)
         if view.rationale:
-            st.subheader("AI-generated rationale (not independently verified)")
-            st.text(view.rationale)
+            with st.expander("Why this proposal? · Unverified AI rationale", expanded=False):
+                st.subheader("AI-generated rationale (not independently verified)")
+                st.text(view.rationale)
     else:
-        st.error(view.message)
-        st.caption("Validation outcome: no accepted plan for the current inputs.")
+        st.error(view.message if not view.validated else
+                 "The proposal could not be revalidated. No revised plan is shown.")
+        readable_caption("Validation outcome: no accepted plan for the current inputs.")
+        readable_caption("Your original activities remain above. Review the inputs before making another explicit request.")
         conflicts = detect_hard_conflicts(context) if view.status == "infeasible" else []
         if conflicts:
             if conflicts_shown:
-                st.caption("See the deterministic hard-conflict check above for counts, affected activities and full details.")
+                readable_caption("See the deterministic hard-conflict check above for counts, affected activities and full details.")
             else:
                 show_conflicts(context, conflicts)
+    with st.expander("Validation details", expanded=False):
+        readable_caption(f"Agent terminal status: {view.status}")
+        if view.validated and comparison is not None:
+            st.success(view.message)
         else:
             for issue in view.issues:
-                st.write(issue)
+                # Infeasible issues already have a complete grouped disclosure above.
+                if view.status != "infeasible":
+                    st.write(issue)
     with st.expander("Agent execution trace"):
         if view.trace:
             st.dataframe(list(view.trace), hide_index=True, width="stretch")
-        st.caption("At most one preflight and two proposal attempts. Trace shows metadata only.")
+        readable_caption("At most one preflight and two proposal attempts. Trace shows metadata only.")
 
 
 def show_current_agent_result(context: DayContext | None, scope: str, *, conflicts_shown: bool = False) -> None:
     result = current_agent_result(st.session_state, context, scope)
-    st.subheader("Agent result")
+    st.subheader("Your rescued day")
     if result is not None:
         render_agent_result(context, result, conflicts_shown=conflicts_shown)
     else:
-        st.caption("No agent result for these inputs.")
+        readable_caption("No agent result for these inputs.")
