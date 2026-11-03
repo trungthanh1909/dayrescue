@@ -6,6 +6,8 @@ Meta Global AI Developer Hackathon 2026 — Indie Developer / Build for Your Wor
 
 DayRescue aims to let Muse Spark propose schedule tradeoffs and then run a deterministic Python validator. The validator alone decides whether a proposed plan satisfies declared hard constraints; it does **not** prove the plan optimal.
 
+The M6A React/FastAPI frontend is available alongside the Streamlit fallback. See [web/README.md](web/README.md) for local startup, browser-only dated storage and verification instructions, and [the migration report](docs/M6A_REACT_MIGRATION_REPORT.md) for review evidence. The Streamlit instructions below continue to describe the fallback release.
+
 ## Verified status / limitations
 
 - **M0:** verified on Windows with Python 3.13.1, Git 2.45.1 and GitHub CLI 2.96.0; local `.venv`, dependency installation, doctor and Streamlit startup passed. Private repository: [trungthanh1909/dayrescue](https://github.com/trungthanh1909/dayrescue), initial commit `06cb2c6`.

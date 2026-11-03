@@ -25,3 +25,9 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# React application
+web/node_modules/
+web/dist/
+web/coverage/
+*.tsbuildinfo
