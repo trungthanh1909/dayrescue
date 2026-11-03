@@ -1,0 +1,4 @@
+# Optional React HTTP adapter; Streamlit requirements remain unchanged.
+-r requirements.txt
+fastapi==0.162.0
+uvicorn>=0.54,<1

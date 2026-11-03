@@ -1,0 +1,147 @@
+{
+  "evidence": "TEST ONLY. Hand-authored data with deterministic Python validation; not Muse output.",
+  "day": {
+    "activities": [
+      {
+        "id": "study",
+        "title": "Study Python",
+        "start": "09:00",
+        "duration": 60,
+        "priority": "high",
+        "fixed": false,
+        "minimum": 30,
+        "status": "pending"
+      },
+      {
+        "id": "call",
+        "title": "Team check-in",
+        "start": "10:00",
+        "duration": 30,
+        "priority": "high",
+        "fixed": true,
+        "minimum": null,
+        "status": "pending"
+      },
+      {
+        "id": "read",
+        "title": "Read a chapter",
+        "start": "11:00",
+        "duration": 30,
+        "priority": "low",
+        "fixed": false,
+        "minimum": null,
+        "status": "pending"
+      }
+    ],
+    "interruptions": [
+      {
+        "id": "event",
+        "title": "Unexpected visitor",
+        "start": "09:00",
+        "end": "10:00"
+      }
+    ],
+    "start": "07:00",
+    "end": "22:00",
+    "demo": false,
+    "revision": 0,
+    "history": []
+  },
+  "input": {
+    "date": "2026-11-04",
+    "revision": 0,
+    "now": "00:00",
+    "day_start": "07:00",
+    "day_end": "22:00",
+    "activities": [
+      {
+        "id": "study",
+        "title": "Study Python",
+        "start_time": "09:00",
+        "duration_minutes": 60,
+        "priority": "high",
+        "fixed": false,
+        "min_duration_minutes": 30
+      },
+      {
+        "id": "call",
+        "title": "Team check-in",
+        "start_time": "10:00",
+        "duration_minutes": 30,
+        "priority": "high",
+        "fixed": true,
+        "min_duration_minutes": null
+      },
+      {
+        "id": "read",
+        "title": "Read a chapter",
+        "start_time": "11:00",
+        "duration_minutes": 30,
+        "priority": "low",
+        "fixed": false,
+        "min_duration_minutes": null
+      }
+    ],
+    "busy_windows": [
+      {
+        "label": "Unexpected visitor",
+        "start_time": "09:00",
+        "end_time": "10:00"
+      }
+    ]
+  },
+  "response": {
+    "fingerprint": "8ed370861036816341d83472584191a2c3871adc7fceb6e061d4ccb202d3ad48",
+    "status": "valid",
+    "message": "VALID \u2014 Python revalidated this proposal for the current inputs.",
+    "plan": {
+      "scheduled": [
+        {
+          "activity_id": "call",
+          "start_minute": 600,
+          "duration_minutes": 30
+        },
+        {
+          "activity_id": "study",
+          "start_minute": 630,
+          "duration_minutes": 30
+        }
+      ],
+      "postponed_ids": [
+        "read"
+      ],
+      "explanation": "TEST ONLY: <script>unverified()</script> Hand-authored explanation, not Muse output."
+    },
+    "validation": {
+      "valid": true,
+      "issues": [],
+      "kept_ids": [
+        "call"
+      ],
+      "moved_or_adjusted_ids": [
+        "study"
+      ],
+      "postponed_ids": [
+        "read"
+      ]
+    },
+    "conflicts": [],
+    "issues": [],
+    "trace": [
+      {
+        "Stage": "preflight",
+        "Attempt": 0,
+        "Outcome": "clear",
+        "Error codes": ""
+      },
+      {
+        "Stage": "proposal",
+        "Attempt": 1,
+        "Outcome": "valid",
+        "Error codes": ""
+      }
+    ],
+    "rationale": "TEST ONLY: <script>unverified()</script> Hand-authored explanation, not Muse output.",
+    "evidence": "offline_fixture"
+  }
+}
