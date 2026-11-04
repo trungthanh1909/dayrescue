@@ -202,3 +202,19 @@ def test_oversized_and_non_json_input_never_reaches_the_model(app, monkeypatch):
     assert request(app, "/api/validate", {"day": day_body()}, headers={**HEADERS,"Content-Length":"65537"}).status_code == 413
     assert request(app, "/api/rescue", {"day": day_body()}, headers={**HEADERS,"Content-Type":"text/plain"}).status_code == 415
     provider.assert_not_called(); live.load_dotenv.assert_not_called()
+
+
+def test_active_flexible_overlap_preserves_full_duration_and_uses_existing_validation(app, transport):
+    _, plan = unexpected_event()
+    calls = transport(plan)
+    day = day_body(); day['now'] = '13:15'
+    day['busy_windows'] = [{'label': 'Doorbell', 'start_time': '13:15', 'end_time': '13:45'}]
+    preflight = request(app, '/api/validate', {'day': day})
+    assert preflight.status_code == 200 and preflight.json()['conflicts'] == []
+    response = request(app, '/api/rescue', {'day': day, 'request_id': str(uuid4())})
+    assert response.json()['validation']['valid'] and len(calls) == 1
+    import json
+    sent = json.loads(json.loads(calls[0].content)['messages'][1]['content'])['context']
+    assert sent['now_minute'] == 13 * 60 + 15
+    assert sent['activities'][0]['duration_minutes'] == 90
+    assert response.json()['plan']['scheduled'][0]['duration_minutes'] == 90

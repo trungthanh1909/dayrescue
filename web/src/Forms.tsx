@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { uid, minutes, type Activity, type Interruption, type Priority } from './state';
+import { TimePicker, formTime } from './TimePicker';
 
 function useDraftGuard(dirty: boolean) {
   useEffect(() => {
@@ -42,7 +43,7 @@ export function ActivityForm({ date, activity, close, save, remove }: { date: st
     // change event. Save the form the user actually reviewed, never an older value.
     const fields = new FormData(e.currentTarget as HTMLFormElement);
     const title = String(fields.get('activityName') ?? '').trim();
-    const target = String(fields.get('plannedDate')), at = String(fields.get('startTime'));
+    const target = String(fields.get('plannedDate')), at = formTime(fields, 'startTime');
     const length = Number(fields.get('duration')), isFixed = fields.get('flexibility') === 'fixed';
     const min = !isFixed && fields.has('shortening') ? Number(fields.get('minimumDuration')) : null;
     if (!title || !Number.isInteger(length) || length < 1 || minutes(at) + length > 1440 || (min !== null && (!Number.isInteger(min) || min < 1 || min > length))) { setError('Use a name, a whole-minute duration within this day, and a shortening minimum no longer than the activity.'); return; }
@@ -53,7 +54,7 @@ export function ActivityForm({ date, activity, close, save, remove }: { date: st
     <p className="helper">Fixed keeps its time and duration. Flexible can move; shortening needs your permission.</p>
     <form onSubmit={submit} onChange={() => { setDirty(true); setError(''); }} autoComplete="off">
       <label htmlFor="activity-name">Activity name</label><input id="activity-name" name="activityName" value={name} onChange={e => setName(e.target.value)} maxLength={120} placeholder="e.g. Study Python…" required />
-      <div className="form-row"><div><label htmlFor="activity-date">Planned date</label><input id="activity-date" name="plannedDate" type="date" defaultValue={date} required /></div><div><label htmlFor="activity-time">Starts at</label><input id="activity-time" name="startTime" type="time" defaultValue={activity?.start ?? '09:00'} required /></div></div>
+      <div className="form-row"><div><label htmlFor="activity-date">Planned date</label><input id="activity-date" name="plannedDate" type="date" defaultValue={date} required /></div><TimePicker id="activity-time" name="startTime" label="Starts at" defaultValue={activity?.start ?? '09:00'}/></div>
       <div className="form-row"><div><label htmlFor="activity-duration">Duration (minutes)</label><input id="activity-duration" name="duration" type="number" inputMode="numeric" min="1" max="1440" value={Number.isFinite(duration) ? duration : ''} onChange={e => setDuration(e.target.valueAsNumber)} required /></div><div><label htmlFor="activity-priority">Priority</label><select id="activity-priority" name="priority" value={priority} onChange={e => setPriority(e.target.value as Priority)}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div></div>
       <label htmlFor="activity-flexibility">How flexible?</label><select id="activity-flexibility" name="flexibility" value={fixed ? 'fixed' : 'flexible'} onChange={e => { setFixed(e.target.value === 'fixed'); if (e.target.value === 'fixed') setShorten(false); }}><option value="flexible">Flexible — can move</option><option value="fixed">Fixed — keeps its time</option></select>
       {!fixed && <label className="check-label"><input name="shortening" type="checkbox" checked={shorten} onChange={e => setShorten(e.target.checked)} /> Allow shortening</label>}
@@ -72,7 +73,7 @@ export function InterruptionForm({ date, event, close, save, remove }: { date: s
   function submit(e: FormEvent) {
     e.preventDefault();
     const fields = new FormData(e.currentTarget as HTMLFormElement);
-    const title = String(fields.get('eventName') ?? '').trim(), at = String(fields.get('eventStart')), until = String(fields.get('eventEnd'));
+    const title = String(fields.get('eventName') ?? '').trim(), at = formTime(fields, 'eventStart'), until = formTime(fields, 'eventEnd');
     if (!title || minutes(until) <= minutes(at) || !fields.has('unavoidable')) { setError('Add a name and a later end time. Interruptions must be unavoidable busy time within one day.'); return; }
     const failure = save(String(fields.get('eventDate')), { id: event?.id ?? uid(), title, start: at, end: until }); if (failure) setError(failure); else close();
   }
@@ -80,7 +81,7 @@ export function InterruptionForm({ date, event, close, save, remove }: { date: s
     <form onSubmit={submit} autoComplete="off" onChange={() => { setDirty(true); setError(''); }}>
       <label htmlFor="event-name">What came up?</label><input id="event-name" name="eventName" value={name} onChange={e => setName(e.target.value)} maxLength={120} placeholder="e.g. An unexpected appointment…" required />
       <label htmlFor="event-date">Date</label><input id="event-date" name="eventDate" type="date" defaultValue={date} required />
-      <div className="form-row"><div><label htmlFor="event-start">Starts at</label><input id="event-start" name="eventStart" type="time" defaultValue={event?.start ?? '13:00'} required /></div><div><label htmlFor="event-end">Ends at</label><input id="event-end" name="eventEnd" type="time" defaultValue={event?.end ?? '14:00'} required /></div></div>
+      <div className="form-row"><TimePicker id="event-start" name="eventStart" label="Starts at" defaultValue={event?.start ?? '13:00'}/><TimePicker id="event-end" name="eventEnd" label="Ends at" defaultValue={event?.end ?? '14:00'}/></div>
       <label className="check-label"><input name="unavoidable" type="checkbox" checked={unavoidable} onChange={e => setUnavoidable(e.target.checked)} /> This is unavoidable busy time</label>
       {!unavoidable && <p className="helper">Movable interruptions are not supported. Leave this checked to reserve the time.</p>}
       {error && <p className="error" role="alert">{error}</p>}
