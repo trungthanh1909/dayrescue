@@ -331,3 +331,64 @@ it('authors English dates and offers every 24-hour minute with no native time wi
   await click('Add interruption'); await fill('event-name','Last minute'); await fill('event-start','23:58'); await fill('event-end','23:59'); await click('Save interruption');
   expect(persisted().days[date].interruptions.at(-1)!.end).toBe('23:59');
 });
+
+const schedule = (label: string) => container.querySelector<HTMLOListElement>(`ol[aria-label="${label}"]`)!;
+const scheduleRecords = (label: string) => [...schedule(label).children].map(li=>`${li.getAttribute('data-timeline-kind')}:${li.getAttribute('data-record-id')}`);
+
+it('shows busy time exactly once in each chronological Before/After timeline without adding it to the proposal', async () => {
+  const mock=network(); const store=seeded(); const original=structuredClone(store.days[date].interruptions);
+  await mount(store);
+  expect(scheduleRecords('Daily schedule')).toEqual(['busy:event','activity:study','activity:call','activity:read']);
+  await click('Find a new plan');
+  expect(scheduleRecords('Before schedule')).toEqual(['busy:event','activity:study','activity:call','activity:read']);
+  expect(scheduleRecords('After schedule')).toEqual(['busy:event','activity:call','activity:study']);
+  for (const label of ['Daily schedule','Before schedule','After schedule']) {
+    const busy=schedule(label).querySelectorAll('[data-timeline-kind="busy"]');
+    expect(busy).toHaveLength(1); expect(busy[0].textContent).toContain('Unexpected visitor');
+    expect(busy[0].textContent).toContain('09:00–10:00'); expect(busy[0].getAttribute('data-date')).toBe(date);
+    expect(busy[0].querySelector('time')?.dateTime).toBe(`${date}T09:00`);
+    expect(busy[0].querySelector('input')).toBeNull();
+  }
+  expect(schedule('After schedule').querySelector('[data-record-id="study"]')?.classList.contains('adjusted-card')).toBe(true);
+  expect(container.querySelector('.unscheduled')?.textContent).toContain('Read a chapter');
+  const rescueBody=JSON.parse(String(rescueCalls(mock)[0][1]?.body));
+  expect(rescueBody.day.activities.map((a:any)=>a.id)).toEqual(['study','call','read']);
+  expect(rescueBody.day.busy_windows).toEqual(fixture.input.busy_windows);
+  await click('Apply this plan'); await click('Confirm & apply');
+  const acceptedBody=JSON.parse(String(mock.mock.calls.filter(c=>String(c[0])==='/api/validate')[1][1]?.body));
+  expect(acceptedBody.proposal.scheduled.map((a:any)=>a.activity_id)).toEqual(['call','study']);
+  expect(acceptedBody.proposal.postponed_ids).toEqual(['read']);
+  expect(persisted().days[date].interruptions).toEqual(original);
+});
+
+it('retains the identical busy record and accepted changes through Apply, reload and Undo', async () => {
+  const mock=network(); await mount(seeded()); const original=structuredClone(persisted().days[date].interruptions);
+  await click('Find a new plan'); await click('Apply this plan'); await click('Confirm & apply');
+  expect(scheduleRecords('Daily schedule')).toEqual(['busy:event','activity:call','activity:study']);
+  expect(schedule('Daily schedule').textContent).toContain('Moved from 09:00 to 10:30');
+  expect(schedule('Daily schedule').textContent).toContain('Shortened from 60 to 30 min');
+  expect(schedule('Daily schedule').textContent).not.toContain('Read a chapter');
+  expect(container.querySelector('.unscheduled')?.textContent).toContain('Read a chapter');
+  await act(async()=>root!.unmount()); root=undefined; await mount();
+  expect(scheduleRecords('Daily schedule')).toEqual(['busy:event','activity:call','activity:study']);
+  expect(schedule('Daily schedule').textContent).toContain('Moved from 09:00 to 10:30');
+  expect(persisted().days[date].interruptions).toEqual(original);
+  await click('Undo applied plan');
+  expect(scheduleRecords('Daily schedule')).toEqual(['busy:event','activity:study','activity:call','activity:read']);
+  expect(schedule('Daily schedule').textContent).not.toContain('Moved from');
+  expect(persisted().days[date].interruptions).toEqual(original);
+  await click('Next day'); expect(container.querySelector('ol[aria-label="Daily schedule"]')).toBeNull();
+  await click('Previous day'); expect(scheduleRecords('Daily schedule')).toContain('busy:event');
+  expect(rescueCalls(mock)).toHaveLength(1);
+});
+
+it('renders a busy-only day without inventing an activity or duplicating the editable event', async () => {
+  const mock=network(false);const store=seeded();store.days[date].activities=[];
+  await mount(store);
+  expect(scheduleRecords('Daily schedule')).toEqual(['busy:event']);
+  expect(schedule('Daily schedule').textContent).toContain('Unavoidable busy time');
+  expect(schedule('Daily schedule').textContent).not.toContain('priority');
+  expect(container.querySelector('.interruptions')?.textContent).toContain('Unexpected visitor');
+  expect(button('Edit interruption Unexpected visitor')).toBeTruthy();
+  expect(rescueCalls(mock)).toHaveLength(0);
+});
