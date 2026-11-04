@@ -31,7 +31,9 @@ async function mount(store?: Store) {
 function button(name: string) { const node = [...container.querySelectorAll('button')].find(b => b.textContent?.trim() === name || b.getAttribute('aria-label') === name); if (!node) throw new Error(`Missing button: ${name}`); return node; }
 async function click(name: string) { await act(async () => button(name).click()); }
 async function fill(id: string, value: string) {
-  await act(async () => { const node = container.querySelector<HTMLInputElement>(`#${id}`)!;
+  await act(async () => { const group = container.querySelector<HTMLElement>(`fieldset#${id}`);
+    if (group) { const [hour,minute] = value.split(':'); for (const [part,next] of [['hour',hour],['minute',minute]]) { const select = group.querySelector<HTMLSelectElement>(`#${id}-${part}`)!; select.value=next; select.dispatchEvent(new Event('change',{bubbles:true})); } return; }
+    const node = container.querySelector<HTMLInputElement>(`#${id}`)!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(node,value);
     node.dispatchEvent(new Event('input',{bubbles:true})); node.dispatchEvent(new Event('change',{bubbles:true})); });
 }
@@ -73,7 +75,8 @@ it('saves the date and time actually displayed by native fields even before a Re
   await act(async () => {
     // Models native date/time entry or autofill without a synthetic change event.
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(container.querySelector('#activity-date'),'2026-11-05');
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(container.querySelector('#activity-time'),'14:15');
+    container.querySelector<HTMLSelectElement>('#activity-time-hour')!.value='14';
+    container.querySelector<HTMLSelectElement>('#activity-time-minute')!.value='15';
   });
   await fill('activity-name','Native date and time stay intact');
   await click('Save activity');
@@ -84,7 +87,7 @@ it('saves the date and time actually displayed by native fields even before a Re
 it('respects the frontend live gate and still supports explicit Python checks', async () => {
   const mock = network(false); await mount(seeded());
   expect(button('Rescue my day').disabled).toBe(true);
-  await click('Check day with Python'); expect(text()).toContain('Python checked the fixed commitments.');
+  await click('Check schedule conflicts'); expect(text()).toContain('Your fixed commitments were checked.');
   expect(rescueCalls(mock)).toHaveLength(0);
 });
 
@@ -121,7 +124,7 @@ it('can keep the original with no automatic overwrite', async () => {
 it('rejects acceptance when Python rejects the current clock, with no extra model call', async () => {
   const mock=network(true,(path,body)=>path==='/api/validate'&&body.proposal?Promise.resolve(reply({fingerprint:fixture.response.fingerprint,validation:{...fixture.response.validation,valid:false}})):undefined);
   await mount(seeded()); await click('Rescue my day'); await click('Apply this plan'); await click('Confirm & apply');
-  expect(text()).toContain('Python rejected this proposal'); expect(persisted().days[date].history).toHaveLength(0);
+  expect(text()).toContain('The revised plan failed a fresh schedule check'); expect(persisted().days[date].history).toHaveLength(0);
   expect(rescueCalls(mock)).toHaveLength(1);
 });
 
@@ -207,5 +210,124 @@ it('leaves failed and malformed proposals unapplied and does not display their r
   const mock=network(true,(path)=>path==='/api/rescue'?Promise.resolve(reply({...fixture.response,status:'provider_error',plan:null,validation:null,rationale:'must not display',message:'The provider failed safely.'})):undefined);
   await mount(seeded()); await click('Rescue my day');
   expect(text()).toContain('No accepted proposal is available'); expect(text()).not.toContain('must not display');
+  expect(container.querySelector('[aria-label="Rescue proposal"]')?.hasAttribute('data-reveal')).toBe(false);
   expect(text()).not.toContain('Apply this plan'); expect(rescueCalls(mock)).toHaveLength(1);
+});
+
+it('distinguishes an unavailable service and recovers with a health-only retry', async () => {
+  let online=false;
+  const mock=network(true,path=>path==='/api/health' ? online ? Promise.resolve(reply({live_enabled:true})) : Promise.reject(new TypeError('offline')) : undefined);
+  await mount(seeded());
+  expect(text()).toContain('Planning service unavailable');
+  expect(button('Check schedule conflicts').disabled).toBe(true);
+  expect(button('Find a new plan').disabled).toBe(true);
+  await click('Retry connection'); expect(text()).toContain('Planning service unavailable');
+  online=true; await click('Retry connection');
+  expect(text()).toContain('Ready to find a new plan'); expect(button('Find a new plan').disabled).toBe(false);
+  expect(mock.mock.calls.every(c=>String(c[0])==='/api/health')).toBe(true);
+});
+
+it('polls only health after a late server startup and never resumes a previous action', async () => {
+  let online=false;
+  const mock=network(false,path=>path==='/api/health' ? online ? Promise.resolve(reply({live_enabled:false})) : Promise.resolve(new Response('',{status:500})) : undefined);
+  await mount(seeded()); expect(text()).toContain('Planning service unavailable');
+  online=true; await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+  expect(text()).toContain('AI planning is currently disabled');
+  expect(button('Check schedule conflicts').disabled).toBe(false); expect(button('Find a new plan').disabled).toBe(true);
+  expect(mock.mock.calls.map(c=>String(c[0]))).toEqual(['/api/health','/api/health']);
+});
+
+it('does not overlap health requests and aborts a pending health check on unmount', async () => {
+  let signal: AbortSignal | undefined;
+  const mock=vi.fn((_url:string, options:RequestInit)=>{signal=options.signal as AbortSignal; return new Promise<Response>(()=>{});});
+  vi.stubGlobal('fetch',mock); await mount();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);window.dispatchEvent(new Event('focus'));});
+  expect(mock).toHaveBeenCalledTimes(1);
+  await act(async()=>root!.unmount()); root=undefined;
+  expect(signal?.aborted).toBe(true);
+});
+
+it('updates availability after a check loses the service and retry never repeats the POST', async () => {
+  let fail=true;
+  const mock=network(true,path=>path==='/api/validate' && fail ? Promise.reject(new TypeError('connection refused')) : undefined);
+  await mount(seeded()); await click('Check schedule conflicts');
+  expect(text()).toContain('Planning service unavailable'); expect(button('Rescue my day').disabled).toBe(true);
+  fail=false; await click('Retry connection');
+  expect(button('Rescue my day').disabled).toBe(false);
+  expect(text()).toContain('Connection restored; your original plan is unchanged.');
+  expect(mock.mock.calls.filter(c=>String(c[0])==='/api/validate')).toHaveLength(1);
+  expect(rescueCalls(mock)).toHaveLength(0);
+});
+
+it('times out health safely and retries health without any generation', async () => {
+  let online=false;
+  const mock=vi.fn((_url:string, options:RequestInit)=>online ? Promise.resolve(reply({live_enabled:false})) : new Promise<Response>((_resolve,reject)=>{options.signal?.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));}));
+  vi.stubGlobal('fetch',mock); await mount(seeded());
+  await act(async()=>{await vi.advanceTimersByTimeAsync(5000);});
+  expect(text()).toContain('Planning service unavailable');
+  online=true; await click('Retry connection');
+  expect(text()).toContain('AI planning is currently disabled');
+  expect(mock.mock.calls.every(c=>c[0]==='/api/health')).toBe(true);
+});
+
+it('refreshes health if the server gate changes after an enabled page loaded, without retrying generation', async () => {
+  let enabled=true;
+  const mock=network(true,path=>path==='/api/health' ? Promise.resolve(reply({live_enabled:enabled})) : path==='/api/rescue' ? (enabled=false, Promise.resolve(reply({detail:'Live AI is disabled in the server process.'},403))) : undefined);
+  await mount(seeded()); await click('Find a new plan');
+  expect(text()).toContain('AI planning is currently disabled'); expect(button('Rescue my day').disabled).toBe(true);
+  expect(rescueCalls(mock)).toHaveLength(1); expect(persisted().days[date].history).toHaveLength(0);
+});
+
+it('saves an active Flexible interruption, highlights it, then generates only on its CTA click', async () => {
+  vi.setSystemTime(new Date(2026,10,4,9,15));
+  const mock=network(); const store=seeded(); store.days[date].interruptions=[];
+  await mount(store); await click('Add interruption');
+  await fill('event-name','Doorbell'); await fill('event-start','09:15'); await fill('event-end','09:45'); await click('Save interruption');
+  const summary=container.querySelector('[aria-label="Affected activities"]')!;
+  expect(summary.textContent).toContain('Study Python'); expect(summary.textContent).toContain('In progress · still pending');
+  expect(summary.textContent).toContain('Time already spent is not deducted');
+  expect(document.activeElement?.id).toBe('affected-activities-heading');
+  expect(mock.mock.calls.map(c=>String(c[0]))).toEqual(['/api/health']);
+  expect(persisted().days[date].activities.every(a=>a.status==='pending')).toBe(true);
+  await click('Find a new plan'); expect(rescueCalls(mock)).toHaveLength(1);
+  const body=JSON.parse(String(mock.mock.calls.find(c=>String(c[0])==='/api/rescue')![1]?.body));
+  expect(body.day.now).toBe('09:15');
+  expect(body.day.activities.find((a:any)=>a.id==='study').duration_minutes).toBe(60);
+  expect(text()).toContain('Apply this plan'); expect(persisted().days[date].history).toHaveLength(0);
+});
+
+it('offers Review commitment for Fixed overlaps and lets Python preflight block rescue', async () => {
+  const mock=network(true,path=>path==='/api/validate'?Promise.resolve(reply({fingerprint:'a'.repeat(64),message:'Fixed conflicts detected.',conflicts:[{code:'FIXED_BUSY_CONFLICT',activity_ids:['call']}]})):undefined);
+  await mount(seeded()); await click('Add interruption');
+  await fill('event-name','Fixed overlap'); await fill('event-start','10:15'); await fill('event-end','10:45'); await click('Save interruption');
+  const summary=container.querySelector('[aria-label="Affected activities"]')!;
+  expect(summary.textContent).toContain('fixed conflict');
+  expect(summary.querySelector('button')?.textContent).toBe('Review commitment');
+  expect([...summary.querySelectorAll('button')].some(b=>b.textContent==='Find a new plan')).toBe(false);
+  await click('Review commitment Team check-in'); expect(container.querySelector('dialog')?.textContent).toContain('Edit activity'); await click('Cancel');
+  await click('Rescue my day'); expect(rescueCalls(mock)).toHaveLength(0);
+  expect(persisted().days[date].activities.find(a=>a.id==='call')!.start).toBe('10:00');
+});
+
+it('saving an interruption invalidates an existing proposal without background regeneration', async () => {
+  const mock=network(); await mount(seeded()); await click('Find a new plan');
+  expect(text()).toContain('Apply this plan'); await click('Add interruption');
+  await fill('event-name','Changed inputs'); await click('Save interruption');
+  expect(text()).not.toContain('Apply this plan'); expect(rescueCalls(mock)).toHaveLength(1);
+  await click('Retry connection'); expect(text()).not.toContain('Apply this plan'); expect(rescueCalls(mock)).toHaveLength(1);
+});
+
+it('authors English dates and offers every 24-hour minute with no native time widgets', async () => {
+  vi.spyOn(navigator,'language','get').mockReturnValue('vi-VN');
+  network(false); await mount(seeded()); expect(text()).toContain('Wednesday 4 November');
+  await click('Edit Study Python');
+  const hours=container.querySelector<HTMLSelectElement>('#activity-time-hour')!, mins=container.querySelector<HTMLSelectElement>('#activity-time-minute')!;
+  expect(hours.getAttribute('aria-label')).toBe('Starts at hour');
+  expect([...hours.options].map(o=>o.value)).toEqual(Array.from({length:24},(_,i)=>String(i).padStart(2,'0')));
+  expect([...mins.options].map(o=>o.value)).toEqual(Array.from({length:60},(_,i)=>String(i).padStart(2,'0')));
+  expect(container.querySelector('input[type="time"]')).toBeNull();
+  await fill('activity-time','00:01'); await fill('activity-duration','1'); await fill('activity-minimum','1'); await click('Save activity');
+  expect(persisted().days[date].activities.find(a=>a.id==='study')!.start).toBe('00:01');
+  await click('Add interruption'); await fill('event-name','Last minute'); await fill('event-start','23:58'); await fill('event-end','23:59'); await click('Save interruption');
+  expect(persisted().days[date].interruptions.at(-1)!.end).toBe('23:59');
 });

@@ -22,7 +22,7 @@ export function weekDates(key: string) { const d = parseDate(key); const monday 
 export const minutes = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
 export const clock = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 export const localClock = (d: Date) => clock(d.getHours() * 60 + d.getMinutes());
-export const dateLabel = (key: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) => new Intl.DateTimeFormat(undefined, options).format(parseDate(key));
+export const dateLabel = (key: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) => new Intl.DateTimeFormat('en-GB', options).format(parseDate(key));
 export const signature = (date: string, day: Day) => JSON.stringify([date, day]);
 export const overlaps = (a: number, b: number, c: number, d: number) => a < d && c < b; // Visual preview only.
 export function affected(day: Day, event: Interruption) { return day.activities.filter(a => a.status === 'pending' && overlaps(minutes(a.start), minutes(a.start) + a.duration, minutes(event.start), minutes(event.end))); }

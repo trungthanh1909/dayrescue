@@ -35,7 +35,28 @@ First launch is empty. Create a dated activity or explicitly try the hand-author
 
 Each day allows 8 activities total and 10 unavoidable interruptions. Completion is explicit. Completed and unscheduled items are excluded from the pending Python payload. The future-day pending clock is 00:00; today's clock comes from the browser. Past days remain editable/viewable but cannot request rescue. Whole local minutes within one day are supported, without overnight or time-zone conversion.
 
-Use **Check day with Python** while generation is disabled. No fixed conflicts is not proof of full feasibility. Fixed commitments never move automatically. An activity can be manually assigned a different date through its editor; AI rescue always handles only the selected day.
+Use **Check schedule conflicts** while generation is disabled. No fixed conflicts is not proof of full feasibility. Fixed commitments never move automatically. An activity can be manually assigned a different date through its editor; AI rescue always handles only the selected day.
+
+Saving an interruption brings an affected-activity summary and **Find a new plan** into view. Flexible overlaps can be considered for a revised time; Fixed overlaps offer **Review commitment**. No generation occurs on save. A currently active activity stays pending, with its full duration included; elapsed progress is not automatically deducted.
+
+Authored date/week labels use English. All time editors use labeled hour/minute selectors covering 00–23 and 00–59, preserving every minute. Native date-calendar dialogs may still use the browser/OS locale. Section reveals last 280ms, do not change layout, and remain optional: unavailable observers or reduced-motion preferences leave content visible.
+
+## Connection troubleshooting
+
+**Planning service unavailable** means the browser could not read a valid API health response. Editing and local saving continue, while online actions are disabled. Expand **Advanced: local connection help** for commands. Starting Vite alone does not start FastAPI.
+
+Start the API from the repository root in a second terminal, then choose **Retry connection**. The frontend also polls health every 15 seconds while visible and checks on window focus. All reconnect checks are GET health requests; they never repeat a failed schedule check, submit a rescue or resume an interrupted generation. A fresh action click is always required.
+
+**AI planning is currently disabled** means the service responded with its gate off. Conflict checking still works. It is a separate state from an unreachable service and does not imply a provider failure.
+
+These optional diagnostics contact only loopback health endpoints:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8001/api/health
+Invoke-RestMethod http://127.0.0.1:5173/api/health
+```
+
+If the direct endpoint fails, inspect the API terminal: use the project `.venv` and install `requirements-api.txt`. The launcher prints an install hint for missing dependencies and a recovery hint for startup/bind failures. An occupied port 8001 causes a nonzero exit; do not stop an unrelated process. If the direct endpoint succeeds but the proxy fails, run Vite from `web/` with the committed configuration and default ports, then retry. Do not expose either process publicly or put credentials in Vite configuration.
 
 For an explicitly authorized manual live session, stop the API and restart it from the repository root with the process flag set to exactly `1`:
 
@@ -44,7 +65,7 @@ $env:DAYRESCUE_ENABLE_LIVE_AI = "1"
 .\.venv\Scripts\python.exe -m api
 ```
 
-Reload the frontend to refresh the gate. The ignored root `.env` stays server-side and is loaded only by the existing lazy invocation boundary after successful preflight. Vite's `.env` loading is disabled. Do not copy credentials into `web/`, use `VITE_` secrets, or expose this service publicly. Only **Rescue my day** starts generation; one click permits one proposal and at most one correction after Python rejection. Provider errors are not retried. This milestone's automated and browser verification used no real Meta requests.
+Use **Retry connection** or wait for health polling to refresh the gate. The ignored root `.env` stays server-side and is loaded only by the existing lazy invocation boundary after successful preflight. Vite's `.env` loading is disabled. Do not copy credentials into `web/`, use `VITE_` secrets, or expose this service publicly. Only an explicit **Rescue my day** or **Find a new plan** click starts generation; one click permits one proposal and at most one correction after Python rejection. Provider errors are not retried. M6A and M6B verification used no real Meta requests; M6B does not authorize another manual live test.
 
 Review Before/After, then choose **Keep original plan** or **Apply this plan**. Confirmation triggers fresh Python validation against the current clock. Input/date changes invalidate the review. Postponed work remains unscheduled on the same date. Undo restores the prior accepted snapshot, including after reload, until later edits make that snapshot stale. Up to five acceptance snapshots per date are retained. Raw provider responses, rationale, credentials and execution diagnostics are never stored in localStorage.
 
@@ -79,3 +100,4 @@ $env:DAYRESCUE_ENABLE_LIVE_AI = "0"
 ```
 
 See [the migration report](../docs/M6A_REACT_MIGRATION_REPORT.md) for evidence, screenshots and remaining limitations.
+The [M6B UX fix report](../docs/M6B_UX_FIX_REPORT.md) records connection diagnosis, English/24-hour controls, interruption follow-through and final regression results.
